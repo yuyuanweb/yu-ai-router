@@ -1,11 +1,10 @@
 spring:
   application:
-    name: springboot-init
+    name: yu-ai-router
   profiles:
     active: local
   # session 配置
   session:
-    store-type: redis
     # session 30 天过期
     timeout: 2592000
   # MySQL 数据库配置
@@ -21,6 +20,16 @@ spring:
       port: 6379
       database: 0
       password:
+  # Spring AI 配置
+  ai:
+    openai:
+      # 通义千问兼容 OpenAI 接口
+      base-url: https://dashscope.aliyuncs.com/compatible-mode
+      api-key: ${QWEN_API_KEY:YOUR_QWEN_API_KEY}
+      chat:
+        options:
+          model: qwen-plus
+          temperature: 0.7
 server:
   port: 8123
   servlet:

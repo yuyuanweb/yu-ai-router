@@ -1,0 +1,33 @@
+package com.yupi.airouter.service;
+
+import com.yupi.airouter.model.dto.chat.ChatRequest;
+import com.yupi.airouter.model.dto.chat.ChatResponse;
+import reactor.core.publisher.Flux;
+
+/**
+ * 聊天服务
+ *
+ * @author <a href="https://codefather.cn">编程导航学习圈</a>
+ */
+public interface ChatService {
+
+    /**
+     * 非流式聊天
+     *
+     * @param chatRequest 聊天请求
+     * @param userId 用户ID
+     * @param apiKeyId API Key ID
+     * @return 聊天响应
+     */
+    ChatResponse chat(ChatRequest chatRequest, Long userId, Long apiKeyId);
+
+    /**
+     * 流式聊天
+     *
+     * @param chatRequest 聊天请求
+     * @param userId 用户ID
+     * @param apiKeyId API Key ID
+     * @return 流式聊天响应
+     */
+    Flux<String> chatStream(ChatRequest chatRequest, Long userId, Long apiKeyId);
+}
