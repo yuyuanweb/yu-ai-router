@@ -1,5 +1,6 @@
 package com.yupi.airouter.controller;
 
+import cn.hutool.extra.servlet.JakartaServletUtil;
 import com.yupi.airouter.exception.BusinessException;
 import com.yupi.airouter.exception.ErrorCode;
 import com.yupi.airouter.model.dto.chat.ChatRequest;
@@ -8,6 +9,7 @@ import com.yupi.airouter.service.ApiKeyService;
 import com.yupi.airouter.service.ChatService;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
@@ -35,7 +37,8 @@ public class ChatController {
     @PostMapping(value = "/completions", produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.TEXT_EVENT_STREAM_VALUE})
     @Operation(summary = "Chat Completions")
     public Object chatCompletions(@RequestBody ChatRequest request,
-                                  @RequestHeader(value = "Authorization", required = false) String authorization) {
+                                  @RequestHeader(value = "Authorization", required = false) String authorization,
+                                  HttpServletRequest httpRequest) {
         // 1. 验证 API Key
         if (authorization == null || !authorization.startsWith("Bearer ")) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "缺少或无效的 Authorization Header");
@@ -54,19 +57,18 @@ public class ChatController {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "messages 不能为空");
         }
 
-        // 3. 设置默认模型（如果未指定）
-        if (request.getModel() == null || request.getModel().isEmpty()) {
-            request.setModel("qwen-plus");
-        }
+        // 3. 获取客户端IP和User-Agent
+        String clientIp = JakartaServletUtil.getClientIP(httpRequest);
+        String userAgent = httpRequest.getHeader("User-Agent");
 
         // 4. 判断是否为流式请求
         Boolean stream = request.getStream();
         if (stream != null && stream) {
             // 流式响应
-            return chatService.chatStream(request, apiKey.getUserId(), apiKey.getId());
+            return chatService.chatStream(request, apiKey.getUserId(), apiKey.getId(), clientIp, userAgent);
         } else {
             // 非流式响应
-            return chatService.chat(request, apiKey.getUserId(), apiKey.getId());
+            return chatService.chat(request, apiKey.getUserId(), apiKey.getId(), clientIp, userAgent);
         }
     }
 }

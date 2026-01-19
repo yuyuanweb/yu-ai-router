@@ -29,15 +29,15 @@ create table if not exists user
 create table if not exists api_key
 (
     id           bigint auto_increment comment 'id' primary key,
-    userId       bigint                                 not null comment '用户id',
-    keyValue     varchar(128)                           not null comment 'API Key值（sk-xxx格式）',
-    keyName      varchar(128)                           null comment 'Key名称/备注',
-    status       varchar(32)  default 'active'          not null comment '状态：active/inactive/revoked',
-    totalTokens  bigint       default 0                 not null comment '已使用Token总数',
-    lastUsedTime datetime                               null comment '最后使用时间',
-    createTime   datetime     default CURRENT_TIMESTAMP not null comment '创建时间',
-    updateTime   datetime     default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP comment '更新时间',
-    isDelete     tinyint      default 0                 not null comment '是否删除',
+    userId       bigint                                not null comment '用户id',
+    keyValue     varchar(128)                          not null comment 'API Key值（sk-xxx格式）',
+    keyName      varchar(128)                          null comment 'Key名称/备注',
+    status       varchar(32) default 'active'          not null comment '状态：active/inactive/revoked',
+    totalTokens  bigint      default 0                 not null comment '已使用Token总数',
+    lastUsedTime datetime                              null comment '最后使用时间',
+    createTime   datetime    default CURRENT_TIMESTAMP not null comment '创建时间',
+    updateTime   datetime    default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP comment '更新时间',
+    isDelete     tinyint     default 0                 not null comment '是否删除',
     UNIQUE KEY uk_keyValue (keyValue),
     INDEX idx_userId (userId),
     INDEX idx_status (status)
@@ -46,26 +46,116 @@ create table if not exists api_key
 -- 请求日志表（用于记录每次请求和Token消耗）
 create table if not exists request_log
 (
-    id              bigint auto_increment comment 'id' primary key,
-    userId          bigint                                 null comment '用户id',
-    apiKeyId        bigint                                 null comment 'API Key id',
-    modelName       varchar(128)                           not null comment '使用的模型名称',
-    promptTokens    int          default 0                 not null comment '输入Token数',
+    id               bigint auto_increment comment 'id' primary key,
+    traceId          varchar(64)                           null comment '链路追踪ID',
+    userId           bigint                                null comment '用户id',
+    apiKeyId         bigint                                null comment 'API Key id',
+    modelId          bigint                                null comment '实际调用的模型id',
+    requestModel     varchar(128)                          null comment '请求的模型标识',
+    modelName        varchar(128)                          null comment '使用的模型名称（兼容字段）',
+    requestType      varchar(32) default 'chat'            not null comment '请求类型：chat/embedding/image',
+    source           varchar(32) default 'web'             not null comment '调用来源：web/api',
+    promptTokens     int         default 0                 not null comment '输入Token数',
     completionTokens int         default 0                 not null comment '输出Token数',
-    totalTokens     int          default 0                 not null comment '总Token数',
-    duration        int          default 0                 not null comment '请求耗时（毫秒）',
-    status          varchar(32)  default 'success'         not null comment '状态：success/failed',
-    errorMessage    text                                   null comment '错误信息',
-    createTime      datetime     default CURRENT_TIMESTAMP not null comment '创建时间',
-    updateTime      datetime     default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP comment '更新时间',
+    totalTokens      int         default 0                 not null comment '总Token数',
+    duration         int         default 0                 not null comment '请求耗时（毫秒）',
+    status           varchar(32) default 'success'         not null comment '状态：success/failed',
+    errorMessage     text                                  null comment '错误信息',
+    errorCode        varchar(64)                           null comment '错误码',
+    routingStrategy  varchar(32)                           null comment '使用的路由策略',
+    isFallback       tinyint     default 0                 not null comment '是否为Fallback请求',
+    clientIp         varchar(64)                           null comment '客户端IP',
+    userAgent        varchar(512)                          null comment 'User-Agent',
+    createTime       datetime    default CURRENT_TIMESTAMP not null comment '创建时间',
+    updateTime       datetime    default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP comment '更新时间',
+    INDEX idx_traceId (traceId),
     INDEX idx_userId (userId),
     INDEX idx_apiKeyId (apiKeyId),
+    INDEX idx_modelId (modelId),
+    INDEX idx_source (source),
     INDEX idx_createTime (createTime)
 ) comment '请求日志' collate = utf8mb4_unicode_ci;
 
+-- 模型提供者表
+create table if not exists model_provider
+(
+    id           bigint auto_increment comment 'id' primary key,
+    providerName varchar(64)                             not null comment '提供者名称（如：qwen/zhipu/deepseek）',
+    displayName  varchar(128)                            not null comment '显示名称（如：通义千问/智谱AI/DeepSeek）',
+    baseUrl      varchar(512)                            not null comment 'API基础URL',
+    apiKey       varchar(512)                            not null comment 'API密钥',
+    status       varchar(32)   default 'active'          not null comment '状态：active/inactive/maintenance',
+    healthStatus varchar(32)   default 'unknown'         not null comment '健康状态：healthy/unhealthy/degraded/unknown',
+    avgLatency   int           default 0                 not null comment '平均延迟（毫秒）',
+    successRate  decimal(5, 2) default 100.00            not null comment '成功率（百分比）',
+    priority     int           default 100               not null comment '优先级（越大越优先）',
+    config       text                                    null comment '额外配置（JSON格式）',
+    createTime   datetime      default CURRENT_TIMESTAMP not null comment '创建时间',
+    updateTime   datetime      default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP comment '更新时间',
+    isDelete     tinyint       default 0                 not null comment '是否删除',
+    UNIQUE KEY uk_providerName (providerName),
+    INDEX idx_status (status),
+    INDEX idx_healthStatus (healthStatus)
+) comment '模型提供者' collate = utf8mb4_unicode_ci;
+
+-- 模型表
+create table if not exists model
+(
+    id               bigint auto_increment comment 'id' primary key,
+    providerId       bigint                                   not null comment '提供者id',
+    modelKey         varchar(128)                             not null comment '模型标识（如：qwen-plus）',
+    modelName        varchar(128)                             not null comment '模型显示名称',
+    modelType        varchar(32)    default 'chat'            not null comment '模型类型：chat/embedding/image/audio',
+    description      varchar(512)                             null comment '模型描述',
+    contextLength    int            default 4096              not null comment '上下文长度限制',
+    inputPrice       decimal(10, 6) default 0                 not null comment '输入价格（元/千Token）',
+    outputPrice      decimal(10, 6) default 0                 not null comment '输出价格（元/千Token）',
+    status           varchar(32)    default 'active'          not null comment '状态：active/inactive/deprecated',
+    healthStatus     varchar(32)    default 'unknown'         not null comment '健康状态：healthy/unhealthy/degraded/unknown',
+    avgLatency       int            default 0                 not null comment '平均延迟（毫秒）',
+    successRate      decimal(5, 2)  default 100.00            not null comment '成功率（百分比）',
+    score            decimal(10, 4) default 0                 not null comment '综合得分（越低越好）',
+    priority         int            default 100               not null comment '优先级（越大越优先）',
+    defaultTimeout   int            default 60000             not null comment '默认超时时间（毫秒）',
+    supportReasoning tinyint        default 0                 not null comment '是否支持深度思考：0=不支持，1=支持',
+    capabilities     varchar(512)                             null comment '能力标签（JSON数组）',
+    createTime       datetime       default CURRENT_TIMESTAMP not null comment '创建时间',
+    updateTime       datetime       default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP comment '更新时间',
+    isDelete         tinyint        default 0                 not null comment '是否删除',
+    UNIQUE KEY uk_modelKey (modelKey),
+    INDEX idx_providerId (providerId),
+    INDEX idx_modelType (modelType),
+    INDEX idx_status (status),
+    INDEX idx_healthStatus (healthStatus)
+) comment '模型' collate = utf8mb4_unicode_ci;
+
 -- 初始化用户数据
 -- 密码是 12345678（MD5 加密 + 盐值 yupi）
-INSERT INTO user (id, userAccount, userPassword, userName, userAvatar, userProfile, userRole) VALUES
-(1, 'admin', '10670d38ec32fa8102be6a37f8cb52bf', '管理员', 'https://www.codefather.cn/logo.png', '系统管理员', 'admin'),
-(2, 'user', '10670d38ec32fa8102be6a37f8cb52bf', '普通用户', 'https://www.codefather.cn/logo.png', '我是一个普通用户', 'user'),
-(3, 'test', '10670d38ec32fa8102be6a37f8cb52bf', '测试账号', 'https://www.codefather.cn/logo.png', '这是一个测试账号', 'user');
+INSERT INTO user (id, userAccount, userPassword, userName, userAvatar, userProfile, userRole)
+VALUES (1, 'admin', '10670d38ec32fa8102be6a37f8cb52bf', '管理员', 'https://www.codefather.cn/logo.png', '系统管理员', 'admin'),
+       (2, 'user', '10670d38ec32fa8102be6a37f8cb52bf', '普通用户', 'https://www.codefather.cn/logo.png', '我是一个普通用户', 'user'),
+       (3, 'test', '10670d38ec32fa8102be6a37f8cb52bf', '测试账号', 'https://www.codefather.cn/logo.png', '这是一个测试账号', 'user');
+
+-- 初始化模型提供者数据
+INSERT INTO model_provider (providerName, displayName, baseUrl, apiKey, status, priority)
+VALUES ('qwen', '通义千问', 'https://dashscope.aliyuncs.com/compatible-mode', 'YOUR_QWEN_API_KEY', 'active', 100),
+       ('zhipu', '智谱AI', 'https://open.bigmodel.cn/api/paas', 'YOUR_ZHIPU_API_KEY', 'active', 90),
+       ('deepseek', 'DeepSeek', 'https://api.deepseek.com', 'YOUR_DEEPSEEK_API_KEY', 'active', 80);
+
+-- 初始化模型数据
+INSERT INTO model (providerId, modelKey, modelName, modelType, description, contextLength, inputPrice, outputPrice, priority, supportReasoning)
+VALUES
+-- 通义千问模型
+(1, 'qwen-plus', 'Qwen Plus', 'chat', '通义千问增强版，性能更强', 32768, 0.004, 0.004, 100, 1),
+(1, 'qwen-turbo', 'Qwen Turbo', 'chat', '通义千问快速版，响应更快', 8192, 0.002, 0.002, 90, 0),
+(1, 'qwen-max', 'Qwen Max', 'chat', '通义千问旗舰版，能力最强，支持深度思考', 32768, 0.04, 0.04, 110, 1),
+
+-- 智谱AI模型
+(2, 'glm-4.7', 'GLM-4.7', 'chat', '智谱AI高智能旗舰模型，通用对话、推理与智能体能力全面升级', 204800, 0.05, 0.05, 100, 1),
+(2, 'glm-4.6', 'GLM-4.6', 'chat', '智谱AI超强性能模型，高级编码能力、强大推理以及工具调用能力', 204800, 0.05, 0.05, 90, 1),
+(2, 'glm-4.7-flash', 'GLM-4.7 Flash', 'chat', '智谱AI免费模型，最新基座模型的普惠版本', 204800, 0.0001, 0.0001, 80, 0),
+
+-- DeepSeek模型
+(3, 'deepseek-reasoner', 'DeepSeek Reasoner', 'chat', 'DeepSeek对话模型，支持深度思考', 32768, 0.01, 0.02, 100, 1),
+(3, 'deepseek-chat', 'DeepSeek Chat', 'chat', 'DeepSeek对话模型', 32768, 0.001, 0.002, 100, 0),
+(3, 'deepseek-coder', 'DeepSeek Coder', 'chat', 'DeepSeek代码模型', 32768, 0.001, 0.002, 90, 0);

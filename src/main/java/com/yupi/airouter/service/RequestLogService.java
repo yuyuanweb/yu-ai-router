@@ -1,5 +1,6 @@
 package com.yupi.airouter.service;
 
+import com.yupi.airouter.model.dto.log.RequestLogDTO;
 import com.yupi.airouter.model.entity.RequestLog;
 
 import java.util.List;
@@ -14,19 +15,9 @@ public interface RequestLogService {
     /**
      * 记录请求日志
      *
-     * @param userId 用户ID
-     * @param apiKeyId API Key ID
-     * @param modelName 模型名称
-     * @param promptTokens 输入Token数
-     * @param completionTokens 输出Token数
-     * @param totalTokens 总Token数
-     * @param duration 请求耗时
-     * @param status 状态
-     * @param errorMessage 错误信息
+     * @param logDTO 日志记录对象
      */
-    void logRequest(Long userId, Long apiKeyId, String modelName,
-                    Integer promptTokens, Integer completionTokens, Integer totalTokens,
-                    Integer duration, String status, String errorMessage);
+    void logRequest(RequestLogDTO logDTO);
 
     /**
      * 获取用户的请求日志

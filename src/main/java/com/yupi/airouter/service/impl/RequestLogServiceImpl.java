@@ -1,7 +1,9 @@
 package com.yupi.airouter.service.impl;
 
+import cn.hutool.core.util.IdUtil;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.yupi.airouter.mapper.RequestLogMapper;
+import com.yupi.airouter.model.dto.log.RequestLogDTO;
 import com.yupi.airouter.model.entity.RequestLog;
 import com.yupi.airouter.service.ApiKeyService;
 import com.yupi.airouter.service.RequestLogService;
@@ -9,6 +11,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.Resource;
+
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -28,20 +31,37 @@ public class RequestLogServiceImpl implements RequestLogService {
 
     @Override
     @Async
-    public void logRequest(Long userId, Long apiKeyId, String modelName,
-                           Integer promptTokens, Integer completionTokens, Integer totalTokens,
-                           Integer duration, String status, String errorMessage) {
+    public void logRequest(RequestLogDTO logDTO) {
+        if (logDTO == null) {
+            return;
+        }
+
+        // 如果没有 traceId，生成一个
+        if (logDTO.getTraceId() == null) {
+            logDTO.setTraceId(IdUtil.simpleUUID());
+        }
+
         // 创建请求日志
         RequestLog log = RequestLog.builder()
-                .userId(userId)
-                .apiKeyId(apiKeyId)
-                .modelName(modelName)
-                .promptTokens(promptTokens)
-                .completionTokens(completionTokens)
-                .totalTokens(totalTokens)
-                .duration(duration)
-                .status(status)
-                .errorMessage(errorMessage)
+                .traceId(logDTO.getTraceId())
+                .userId(logDTO.getUserId())
+                .apiKeyId(logDTO.getApiKeyId())
+                .modelId(logDTO.getModelId())
+                .requestModel(logDTO.getRequestModel())
+                .modelName(logDTO.getRequestModel())  // 兼容字段
+                .requestType(logDTO.getRequestType() != null ? logDTO.getRequestType() : "chat")
+                .source(logDTO.getSource() != null ? logDTO.getSource() : "web")
+                .promptTokens(logDTO.getPromptTokens() != null ? logDTO.getPromptTokens() : 0)
+                .completionTokens(logDTO.getCompletionTokens() != null ? logDTO.getCompletionTokens() : 0)
+                .totalTokens(logDTO.getTotalTokens() != null ? logDTO.getTotalTokens() : 0)
+                .duration(logDTO.getDuration() != null ? logDTO.getDuration() : 0)
+                .status(logDTO.getStatus())
+                .errorMessage(logDTO.getErrorMessage())
+                .errorCode(logDTO.getErrorCode())
+                .routingStrategy(logDTO.getRoutingStrategy())
+                .isFallback(logDTO.getIsFallback() != null && logDTO.getIsFallback() ? 1 : 0)
+                .clientIp(logDTO.getClientIp())
+                .userAgent(logDTO.getUserAgent())
                 .createTime(LocalDateTime.now())
                 .updateTime(LocalDateTime.now())
                 .build();
@@ -49,9 +69,12 @@ public class RequestLogServiceImpl implements RequestLogService {
         // 保存日志
         requestLogMapper.insert(log);
 
-        // 更新 API Key 的使用统计（仅成功的请求）
-        if ("success".equals(status) && apiKeyId != null && totalTokens != null && totalTokens > 0) {
-            apiKeyService.updateUsageStats(apiKeyId, totalTokens);
+        // 更新 API Key 的使用统计（仅成功的请求且有 apiKeyId）
+        if ("success".equals(logDTO.getStatus()) && 
+            logDTO.getApiKeyId() != null && 
+            logDTO.getTotalTokens() != null && 
+            logDTO.getTotalTokens() > 0) {
+            apiKeyService.updateUsageStats(logDTO.getApiKeyId(), logDTO.getTotalTokens());
         }
     }
 
