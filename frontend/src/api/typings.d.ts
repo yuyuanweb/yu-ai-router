@@ -1,7 +1,33 @@
 declare namespace API {
+  type ApiKeyCreateRequest = {
+    keyName?: string
+  }
+
+  type ApiKeyVO = {
+    id?: number
+    keyValue?: string
+    keyName?: string
+    status?: string
+    totalTokens?: number
+    lastUsedTime?: string
+    createTime?: string
+  }
+
+  type BaseResponseApiKeyVO = {
+    code?: number
+    data?: ApiKeyVO
+    message?: string
+  }
+
   type BaseResponseBoolean = {
     code?: number
     data?: boolean
+    message?: string
+  }
+
+  type BaseResponseListRequestLog = {
+    code?: number
+    data?: RequestLog[]
     message?: string
   }
 
@@ -17,9 +43,27 @@ declare namespace API {
     message?: string
   }
 
+  type BaseResponsePageApiKeyVO = {
+    code?: number
+    data?: PageApiKeyVO
+    message?: string
+  }
+
   type BaseResponsePageUserVO = {
     code?: number
     data?: PageUserVO
+    message?: string
+  }
+
+  type BaseResponseString = {
+    code?: number
+    data?: string
+    message?: string
+  }
+
+  type BaseResponseTokenStatsVO = {
+    code?: number
+    data?: TokenStatsVO
     message?: string
   }
 
@@ -35,14 +79,25 @@ declare namespace API {
     message?: string
   }
 
-  type BaseResponseString = {
-    code?: number
-    data?: string
-    message?: string
+  type ChatMessage = {
+    role?: string
+    content?: string
+  }
+
+  type ChatRequest = {
+    model?: string
+    messages?: ChatMessage[]
+    stream?: boolean
+    temperature?: number
+    max_tokens?: number
   }
 
   type DeleteRequest = {
     id?: number
+  }
+
+  type getMyLogsParams = {
+    limit?: number
   }
 
   type getUserByIdParams = {
@@ -51,6 +106,11 @@ declare namespace API {
 
   type getUserVOByIdParams = {
     id: number
+  }
+
+  type listMyApiKeysParams = {
+    pageNum?: number
+    pageSize?: number
   }
 
   type LoginUserVO = {
@@ -64,6 +124,15 @@ declare namespace API {
     updateTime?: string
   }
 
+  type PageApiKeyVO = {
+    records?: ApiKeyVO[]
+    pageNumber?: number
+    pageSize?: number
+    totalPage?: number
+    totalRow?: number
+    optimizeCountQuery?: boolean
+  }
+
   type PageUserVO = {
     records?: UserVO[]
     pageNumber?: number
@@ -71,6 +140,25 @@ declare namespace API {
     totalPage?: number
     totalRow?: number
     optimizeCountQuery?: boolean
+  }
+
+  type RequestLog = {
+    id?: number
+    userId?: number
+    apiKeyId?: number
+    modelName?: string
+    promptTokens?: number
+    completionTokens?: number
+    totalTokens?: number
+    duration?: number
+    status?: string
+    errorMessage?: string
+    createTime?: string
+    updateTime?: string
+  }
+
+  type TokenStatsVO = {
+    totalTokens?: number
   }
 
   type User = {

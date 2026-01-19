@@ -3,6 +3,8 @@ import HomePage from '@/pages/HomePage.vue'
 import UserLoginPage from '@/pages/user/UserLoginPage.vue'
 import UserRegisterPage from '@/pages/user/UserRegisterPage.vue'
 import UserManagePage from '@/pages/admin/UserManagePage.vue'
+import ChatPage from '@/pages/ChatPage.vue'
+import ApiKeyPage from '@/pages/user/ApiKeyPage.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -11,6 +13,16 @@ const router = createRouter({
       path: '/',
       name: '主页',
       component: HomePage,
+    },
+    {
+      path: '/chat',
+      name: 'AI 对话',
+      component: ChatPage,
+    },
+    {
+      path: '/user/apikey',
+      name: 'API Key 管理',
+      component: ApiKeyPage,
     },
     {
       path: '/user/login',

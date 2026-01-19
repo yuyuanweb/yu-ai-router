@@ -6,7 +6,7 @@
         <RouterLink to="/">
           <div class="header-left">
             <img class="logo" src="@/assets/logo.png" alt="Logo" />
-            <h1 class="site-title">项目名称</h1>
+            <h1 class="site-title">鱼 AI 网关</h1>
           </div>
         </RouterLink>
       </a-col>
@@ -53,7 +53,12 @@ import { useRouter } from 'vue-router'
 import { type MenuProps, message } from 'ant-design-vue'
 import { useLoginUserStore } from '@/stores/loginUser.ts'
 import { userLogout } from '@/api/userController.ts'
-import { LogoutOutlined, HomeOutlined } from '@ant-design/icons-vue'
+import {
+  LogoutOutlined,
+  HomeOutlined,
+  CommentOutlined,
+  KeyOutlined,
+} from '@ant-design/icons-vue'
 
 const loginUserStore = useLoginUserStore()
 const router = useRouter()
@@ -71,6 +76,18 @@ const originItems = [
     icon: () => h(HomeOutlined),
     label: '主页',
     title: '主页',
+  },
+  {
+    key: '/chat',
+    icon: () => h(CommentOutlined),
+    label: 'AI 对话',
+    title: 'AI 对话',
+  },
+  {
+    key: '/user/apikey',
+    icon: () => h(KeyOutlined),
+    label: 'API Key',
+    title: 'API Key 管理',
   },
   {
     key: '/admin/userManage',
