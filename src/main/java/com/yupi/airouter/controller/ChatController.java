@@ -1,6 +1,7 @@
 package com.yupi.airouter.controller;
 
 import cn.hutool.extra.servlet.JakartaServletUtil;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yupi.airouter.annotation.RateLimit;
 import com.yupi.airouter.exception.BusinessException;
 import com.yupi.airouter.exception.ErrorCode;
@@ -30,6 +31,9 @@ public class ChatController {
 
     @Resource
     private ApiKeyService apiKeyService;
+
+    @Resource
+    private ObjectMapper objectMapper;
 
     /**
      * Chat Completions 接口
@@ -66,8 +70,18 @@ public class ChatController {
         // 4. 判断是否为流式请求
         Boolean stream = request.getStream();
         if (stream != null && stream) {
-            // 流式响应
-            return chatService.chatStream(request, apiKey.getUserId(), apiKey.getId(), clientIp, userAgent);
+            // 流式响应 - 转换为 SSE 格式
+            return chatService.chatStream(request, apiKey.getUserId(), apiKey.getId(), clientIp, userAgent)
+                    .map(streamResponse -> {
+                        try {
+                            // 将 StreamResponse 转换为 JSON
+                            String json = objectMapper.writeValueAsString(streamResponse);
+                            return json + "\n\n";
+                        } catch (Exception e) {
+                            log.error("Failed to serialize stream response", e);
+                            return "";
+                        }
+                    });
         } else {
             // 非流式响应
             return chatService.chat(request, apiKey.getUserId(), apiKey.getId(), clientIp, userAgent);

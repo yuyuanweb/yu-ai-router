@@ -8,6 +8,7 @@ import com.yupi.airouter.model.dto.chat.ChatMessage;
 import com.yupi.airouter.model.dto.chat.ChatRequest;
 import com.yupi.airouter.model.dto.chat.ChatResponse;
 import com.yupi.airouter.model.dto.chat.StreamChunk;
+import com.yupi.airouter.model.dto.chat.StreamResponse;
 import com.yupi.airouter.model.dto.log.RequestLogDTO;
 import com.yupi.airouter.model.entity.Model;
 import com.yupi.airouter.model.entity.ModelProvider;
@@ -103,6 +104,7 @@ public class ChatServiceImpl implements ChatService {
                                                  String clientIp, String userAgent) {
         // 尝试调用主模型
         try {
+            log.info("调用模型，{}", primaryModel.getModelKey());
             return callModel(primaryModel, chatRequest, userId, apiKeyId, traceId, startTime, strategyType, isFallback, clientIp, userAgent);
         } catch (Exception e) {
             log.warn("模型 {} 调用失败，尝试 Fallback", primaryModel.getModelKey(), e);
@@ -194,19 +196,16 @@ public class ChatServiceImpl implements ChatService {
     }
 
     @Override
-    public Flux<String> chatStream(ChatRequest chatRequest, Long userId, Long apiKeyId, String clientIp, String userAgent) {
+    public Flux<StreamResponse> chatStream(ChatRequest chatRequest, Long userId, Long apiKeyId, String clientIp, String userAgent) {
         String requestedModel = chatRequest.getModel();
         long startTime = System.currentTimeMillis();
         String traceId = IdUtil.simpleUUID();
+        long created = System.currentTimeMillis() / 1000;
 
         // Token 计数器
         final int[] promptTokens = {0};
         final int[] completionTokens = {0};
-
-        // 深度思考状态追踪
-        final boolean[] thinkingStarted = {false};
-        final boolean[] thinkingEnded = {false};
-        final boolean isReasoningEnabled = chatRequest.getEnableReasoning() != null && chatRequest.getEnableReasoning();
+        final boolean[] isFirstChunk = {true};
 
         try {
             // 确定路由策略：优先使用请求中指定的策略，否则根据是否指定模型决定
@@ -228,7 +227,7 @@ public class ChatServiceImpl implements ChatService {
             // 调用流式模型，获取统一格式的响应块
             Flux<StreamChunk> chunkFlux = modelInvokeService.invokeStreamChunk(selectedModel, provider, chatRequest);
 
-            // 将统一格式的响应块转换为输出字符串
+            // 将统一格式的响应块转换为 OpenAI SSE 格式的 StreamResponse
             return chunkFlux.flatMap(chunk -> {
                 // 更新 Token 统计
                 if (chunk.getPromptTokens() != null && chunk.getPromptTokens() > 0) {
@@ -238,40 +237,62 @@ public class ChatServiceImpl implements ChatService {
                     completionTokens[0] = chunk.getCompletionTokens();
                 }
 
+                // 构建 Delta
+                StreamResponse.Delta.DeltaBuilder deltaBuilder = StreamResponse.Delta.builder();
+
+                // 第一个块包含 role
+                if (isFirstChunk[0]) {
+                    deltaBuilder.role("assistant");
+                    isFirstChunk[0] = false;
+                }
+
+                // 处理普通文本内容
+                if (chunk.hasText()) {
+                    deltaBuilder.content(chunk.getText());
+                }
+
                 // 处理深度思考内容
-                if (isReasoningEnabled && chunk.hasReasoningContent()) {
-                    String reasoningContent = chunk.getReasoningContent();
-
-                    // 思考内容存在且未开始
-                    if (!thinkingStarted[0]) {
-                        thinkingStarted[0] = true;
-                        String thinkingText = "[THINKING]" + escapeNewlines(reasoningContent);
-                        return Flux.just(thinkingText + "\n\n");
-                    }
-
-                    // 思考内容正在返回
-                    if (!thinkingEnded[0]) {
-                        return Flux.just(escapeNewlines(reasoningContent) + "\n\n");
-                    }
+                if (chunk.hasReasoningContent()) {
+                    deltaBuilder.reasoningContent(chunk.getReasoningContent());
                 }
 
-                // 思考内容结束，开始返回答案
-                if (isReasoningEnabled && thinkingStarted[0] && !thinkingEnded[0] && !chunk.hasReasoningContent()) {
-                    thinkingEnded[0] = true;
-                    String endTag = "[/THINKING]\n\n";
-                    if (chunk.hasText()) {
-                        return Flux.just(endTag + escapeNewlines(chunk.getText()) + "\n\n");
-                    }
-                    return Flux.just(endTag);
+                // 如果既没有文本也没有思考内容，跳过
+                if (!chunk.hasText() && !chunk.hasReasoningContent()) {
+                    return Flux.empty();
                 }
 
-                // 返回普通文本内容
-                if ((!isReasoningEnabled || thinkingEnded[0]) && chunk.hasText()) {
-                    return Flux.just(escapeNewlines(chunk.getText()) + "\n\n");
-                }
+                StreamResponse.Delta delta = deltaBuilder.build();
 
-                return Flux.empty();
-            }).doOnComplete(() -> {
+                StreamResponse.StreamChoice choice = StreamResponse.StreamChoice.builder()
+                        .index(0)
+                        .delta(delta)
+                        .finishReason(null)
+                        .build();
+
+                return Flux.just(StreamResponse.builder()
+                        .id(traceId)
+                        .object("chat.completion.chunk")
+                        .created(created)
+                        .model(selectedModel.getModelKey())
+                        .choices(List.of(choice))
+                        .build());
+            })
+            // 在流结束时追加一个带 finishReason: "stop" 的结束标识
+            .concatWith(Flux.defer(() -> {
+                StreamResponse.StreamChoice finishChoice = StreamResponse.StreamChoice.builder()
+                        .index(0)
+                        .delta(StreamResponse.Delta.builder().build())
+                        .finishReason("stop")
+                        .build();
+                return Flux.just(StreamResponse.builder()
+                        .id(traceId)
+                        .object("chat.completion.chunk")
+                        .created(created)
+                        .model(selectedModel.getModelKey())
+                        .choices(List.of(finishChoice))
+                        .build());
+            }))
+            .doOnComplete(() -> {
                 // 流结束时记录日志
                 long duration = System.currentTimeMillis() - startTime;
                 int totalTokens = promptTokens[0] + completionTokens[0];
@@ -319,16 +340,6 @@ public class ChatServiceImpl implements ChatService {
             log.error("流式调用模型失败", e);
             return Flux.error(new BusinessException(ErrorCode.SYSTEM_ERROR, "流式调用模型失败: " + e.getMessage()));
         }
-    }
-
-    /**
-     * 转义换行符
-     */
-    private String escapeNewlines(String text) {
-        if (text == null) {
-            return null;
-        }
-        return text.replace("\n", "\\n");
     }
 
     /**
