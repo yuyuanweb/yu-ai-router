@@ -91,6 +91,12 @@ declare namespace API {
     message?: string
   }
 
+  type BaseResponseSetString = {
+    code?: number
+    data?: string[]
+    message?: string
+  }
+
   type BaseResponseString = {
     code?: number
     data?: string
@@ -115,6 +121,11 @@ declare namespace API {
     message?: string
   }
 
+  type BlacklistRequest = {
+    ip?: string
+    reason?: string
+  }
+
   type ChatMessage = {
     role?: string
     content?: string
@@ -127,8 +138,11 @@ declare namespace API {
     temperature?: number
     max_tokens?: number
     enable_reasoning?: boolean
-    /** 路由策略: auto(自动) | cost_first(成本优先) | latency_first(延迟优先) | fixed(固定模型) */
-    routing_strategy?: 'auto' | 'cost_first' | 'latency_first' | 'fixed'
+    routing_strategy?: string
+  }
+
+  type checkBlacklistParams = {
+    ip: string
   }
 
   type DeleteRequest = {
