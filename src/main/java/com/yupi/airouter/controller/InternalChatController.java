@@ -2,6 +2,7 @@ package com.yupi.airouter.controller;
 
 import cn.hutool.extra.servlet.JakartaServletUtil;
 import com.yupi.airouter.annotation.AuthCheck;
+import com.yupi.airouter.annotation.RateLimit;
 import com.yupi.airouter.common.ResultUtils;
 import com.yupi.airouter.constant.UserConstant;
 import com.yupi.airouter.exception.BusinessException;
@@ -42,6 +43,7 @@ public class InternalChatController {
     @PostMapping(value = "/completions", produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.TEXT_EVENT_STREAM_VALUE})
     @AuthCheck(mustRole = UserConstant.DEFAULT_ROLE)
     @Operation(summary = "内部聊天接口")
+    @RateLimit(type = RateLimit.LimitType.IP, limit = 30)
     public Object chatCompletions(@RequestBody ChatRequest request,
                                    HttpServletRequest httpRequest) {
         User loginUser = userService.getLoginUser(httpRequest);

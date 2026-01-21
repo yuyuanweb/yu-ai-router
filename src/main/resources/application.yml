@@ -19,7 +19,6 @@ spring:
       host: localhost
       port: 6379
       database: 0
-      password:
   # Spring AI 配置
   ai:
     openai:

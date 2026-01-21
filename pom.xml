@@ -67,8 +67,8 @@
         <!-- Redisson -->
         <dependency>
             <groupId>org.redisson</groupId>
-            <artifactId>redisson</artifactId>
-            <version>3.50.0</version>
+            <artifactId>redisson-spring-boot-starter</artifactId>
+            <version>3.52.0</version>
         </dependency>
         <!-- MyBatis-Flex -->
         <dependency>
@@ -159,6 +159,11 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
+                    <source>21</source>
+                    <target>21</target>
+                    <compilerArgs>
+                        <arg>--enable-preview</arg>
+                    </compilerArgs>
                     <annotationProcessorPaths>
                         <path>
                             <groupId>org.projectlombok</groupId>
