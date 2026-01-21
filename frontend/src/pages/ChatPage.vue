@@ -425,7 +425,6 @@ const streamChat = async (chatRequest: Record<string, unknown>) => {
   let buffer = ''
   let assistantContent = ''
   let thinkingContent = ''
-  let inThinking = false
 
   while (true) {
     const { done, value } = await reader.read()
@@ -445,61 +444,42 @@ const streamChat = async (chatRequest: Record<string, unknown>) => {
       for (const line of lines) {
         if (line.startsWith('data:')) {
           // 移除 'data:' 前缀
-          const content = line.substring(5).trim()
-          if (content && content !== '[DONE]') {
-            // 反转义换行符
-            let unescapedContent = content.replace(/\\n/g, '\n')
+          const data = line.substring(5).trim()
+          console.log("data:",data);
 
-            // 处理思考内容标识
-            while (unescapedContent.length > 0) {
-              if (unescapedContent.startsWith('[THINKING]')) {
-                // 开始思考
-                inThinking = true
-                unescapedContent = unescapedContent.substring(10)
+          if (!data) {
+            continue
+          }
+
+          try {
+            // 解析 JSON 格式的 StreamResponse
+            const streamResponse: API.StreamResponse = JSON.parse(data)
+
+            // 检查是否结束（finishReason 为 "stop"）
+            if (streamResponse.choices && streamResponse.choices.length > 0) {
+              const choice = streamResponse.choices[0]
+
+              // 如果有 finishReason，表示流结束
+              if (choice.finishReason === 'stop') {
                 continue
               }
 
-              if (unescapedContent.startsWith('[/THINKING]')) {
-                // 结束思考
-                inThinking = false
-                unescapedContent = unescapedContent.substring(11)
-                continue
+              const delta = choice.delta
+
+              // 处理深度思考内容
+              if (delta?.reasoningContent) {
+                thinkingContent += delta.reasoningContent
+                streamingThinking.value = thinkingContent
               }
 
-              // 检查是否包含标识
-              const thinkingStartIndex = unescapedContent.indexOf('[THINKING]')
-              const thinkingEndIndex = unescapedContent.indexOf('[/THINKING]')
-
-              if (inThinking) {
-                if (thinkingEndIndex !== -1) {
-                  // 思考内容结束
-                  thinkingContent += unescapedContent.substring(0, thinkingEndIndex)
-                  unescapedContent = unescapedContent.substring(thinkingEndIndex)
-                  continue
-                } else {
-                  // 继续累积思考内容
-                  thinkingContent += unescapedContent
-                  break
-                }
-              } else {
-                if (thinkingStartIndex !== -1) {
-                  // 先处理思考开始前的内容
-                  if (thinkingStartIndex > 0) {
-                    assistantContent += unescapedContent.substring(0, thinkingStartIndex)
-                  }
-                  unescapedContent = unescapedContent.substring(thinkingStartIndex)
-                  continue
-                } else {
-                  // 普通答案内容
-                  assistantContent += unescapedContent
-                  break
-                }
+              // 处理普通文本内容
+              if (delta?.content) {
+                assistantContent += delta.content
+                streamingContent.value = assistantContent
               }
             }
-
-            // 更新流式显示
-            streamingThinking.value = thinkingContent
-            streamingContent.value = assistantContent
+          } catch (e) {
+            console.error('解析 SSE 数据失败:', data, e)
           }
         }
       }
@@ -511,16 +491,29 @@ const streamChat = async (chatRequest: Record<string, unknown>) => {
     const lines = buffer.split('\n')
     for (const line of lines) {
       if (line.startsWith('data:')) {
-        const content = line.substring(5).trim()
-        if (content && content !== '[DONE]') {
-          const unescapedContent = content.replace(/\\n/g, '\n')
-          if (inThinking) {
-            thinkingContent += unescapedContent
-          } else {
-            assistantContent += unescapedContent
+        const data = line.substring(5).trim()
+        if (data) {
+          try {
+            const streamResponse: API.StreamResponse = JSON.parse(data)
+            if (streamResponse.choices && streamResponse.choices.length > 0) {
+              const choice = streamResponse.choices[0]
+              // 如果有 finishReason，表示流结束
+              if (choice.finishReason === 'stop') {
+                continue
+              }
+              const delta = choice.delta
+              if (delta?.reasoningContent) {
+                thinkingContent += delta.reasoningContent
+                streamingThinking.value = thinkingContent
+              }
+              if (delta?.content) {
+                assistantContent += delta.content
+                streamingContent.value = assistantContent
+              }
+            }
+          } catch (e) {
+            console.error('解析剩余 SSE 数据失败:', data, e)
           }
-          streamingThinking.value = thinkingContent
-          streamingContent.value = assistantContent
         }
       }
     }
