@@ -58,6 +58,8 @@ import {
   HomeOutlined,
   CommentOutlined,
   KeyOutlined,
+  AppstoreOutlined,
+  CloudServerOutlined,
 } from '@ant-design/icons-vue'
 
 const loginUserStore = useLoginUserStore()
@@ -65,7 +67,7 @@ const router = useRouter()
 // 当前选中菜单
 const selectedKeys = ref<string[]>(['/'])
 // 监听路由变化，更新当前选中菜单
-router.afterEach((to, from, next) => {
+router.afterEach((to) => {
   selectedKeys.value = [to.path]
 })
 
@@ -93,6 +95,18 @@ const originItems = [
     key: '/admin/userManage',
     label: '用户管理',
     title: '用户管理',
+  },
+  {
+    key: '/admin/modelManage',
+    icon: () => h(AppstoreOutlined),
+    label: '模型管理',
+    title: '模型管理',
+  },
+  {
+    key: '/admin/providerManage',
+    icon: () => h(CloudServerOutlined),
+    label: '提供者管理',
+    title: '提供者管理',
   },
 ]
 
