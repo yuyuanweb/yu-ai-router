@@ -212,6 +212,7 @@ declare namespace API {
     userStatus?: string
     tokenQuota?: number
     usedTokens?: number
+    balance?: number
     createTime?: string
     updateTime?: string
   }
@@ -454,6 +455,7 @@ declare namespace API {
     userStatus?: string
     tokenQuota?: number
     usedTokens?: number
+    balance?: number
     createTime?: string
   }
 
@@ -564,6 +566,87 @@ declare namespace API {
   type BaseResponseListMapStringObject = {
     code?: number
     data?: Record<string, any>[]
+    message?: string
+  }
+
+  // 阶段六新增类型定义
+
+  type BalanceVO = {
+    balance?: number
+    totalSpending?: number
+    totalRecharge?: number
+  }
+
+  type BillingRecord = {
+    id?: number
+    userId?: number
+    requestLogId?: number
+    amount?: number
+    balanceBefore?: number
+    balanceAfter?: number
+    description?: string
+    billingType?: string
+    createTime?: string
+  }
+
+  type RechargeRecord = {
+    id?: number
+    userId?: number
+    amount?: number
+    paymentMethod?: string
+    paymentId?: string
+    status?: string
+    description?: string
+    createTime?: string
+    updateTime?: string
+  }
+
+  type CreateRechargeRequest = {
+    amount?: number
+  }
+
+  type CreateRechargeResponse = {
+    checkoutUrl?: string
+    sessionId?: string
+  }
+
+  type PageBillingRecord = {
+    records?: BillingRecord[]
+    pageNumber?: number
+    pageSize?: number
+    totalPage?: number
+    totalRow?: number
+  }
+
+  type PageRechargeRecord = {
+    records?: RechargeRecord[]
+    pageNumber?: number
+    pageSize?: number
+    totalPage?: number
+    totalRow?: number
+  }
+
+  type BaseResponseBalanceVO = {
+    code?: number
+    data?: BalanceVO
+    message?: string
+  }
+
+  type BaseResponsePageBillingRecord = {
+    code?: number
+    data?: PageBillingRecord
+    message?: string
+  }
+
+  type BaseResponsePageRechargeRecord = {
+    code?: number
+    data?: PageRechargeRecord
+    message?: string
+  }
+
+  type BaseResponseCreateRechargeResponse = {
+    code?: number
+    data?: CreateRechargeResponse
     message?: string
   }
 }
