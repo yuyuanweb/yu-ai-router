@@ -61,6 +61,8 @@ import {
   AppstoreOutlined,
   CloudServerOutlined,
   StopOutlined,
+  UserOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons-vue'
 
 const loginUserStore = useLoginUserStore()
@@ -91,6 +93,12 @@ const originItems = [
     icon: () => h(KeyOutlined),
     label: 'API Key',
     title: 'API Key 管理',
+  },
+  {
+    key: '/user/history',
+    icon: () => h(HistoryOutlined),
+    label: '调用历史',
+    title: '调用历史',
   },
   {
     key: '/admin/userManage',

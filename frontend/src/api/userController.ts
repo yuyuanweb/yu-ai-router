@@ -125,3 +125,82 @@ export async function updateUser(body: API.UserUpdateRequest, options?: { [key: 
     ...(options || {}),
   })
 }
+
+/** 获取我的配额信息 GET /user/quota/my */
+export async function getMyQuota(options?: { [key: string]: any }) {
+  return request<API.BaseResponseQuotaVO>('/user/quota/my', {
+    method: 'GET',
+    ...(options || {}),
+  })
+}
+
+/** 设置用户配额 POST /user/quota/set */
+export async function setUserQuota(
+  body: API.QuotaUpdateRequest,
+  options?: { [key: string]: any }
+) {
+  return request<API.BaseResponseBoolean>('/user/quota/set', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: body,
+    ...(options || {}),
+  })
+}
+
+/** 重置用户已使用配额 POST /user/quota/reset */
+export async function resetUserQuota(
+  params: { userId: number },
+  options?: { [key: string]: any }
+) {
+  return request<API.BaseResponseBoolean>('/user/quota/reset', {
+    method: 'POST',
+    params: {
+      ...params,
+    },
+    ...(options || {}),
+  })
+}
+
+/** 禁用用户 POST /user/disable */
+export async function disableUser(
+  params: { userId: number },
+  options?: { [key: string]: any }
+) {
+  return request<API.BaseResponseBoolean>('/user/disable', {
+    method: 'POST',
+    params: {
+      ...params,
+    },
+    ...(options || {}),
+  })
+}
+
+/** 启用用户 POST /user/enable */
+export async function enableUser(
+  params: { userId: number },
+  options?: { [key: string]: any }
+) {
+  return request<API.BaseResponseBoolean>('/user/enable', {
+    method: 'POST',
+    params: {
+      ...params,
+    },
+    ...(options || {}),
+  })
+}
+
+/** 获取用户使用分析数据 GET /user/analysis */
+export async function getUserAnalysis(
+  params: { userId: number },
+  options?: { [key: string]: any }
+) {
+  return request<API.BaseResponseUserAnalysisVO>('/user/analysis', {
+    method: 'GET',
+    params: {
+      ...params,
+    },
+    ...(options || {}),
+  })
+}

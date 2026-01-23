@@ -209,6 +209,9 @@ declare namespace API {
     userAvatar?: string
     userProfile?: string
     userRole?: string
+    userStatus?: string
+    tokenQuota?: number
+    usedTokens?: number
     createTime?: string
     updateTime?: string
   }
@@ -370,6 +373,7 @@ declare namespace API {
     promptTokens?: number
     completionTokens?: number
     totalTokens?: number
+    cost?: number
     duration?: number
     status?: string
     errorMessage?: string
@@ -437,6 +441,7 @@ declare namespace API {
     userAvatar?: string
     userProfile?: string
     userRole?: string
+    tokenQuota?: number
   }
 
   type UserVO = {
@@ -446,6 +451,119 @@ declare namespace API {
     userAvatar?: string
     userProfile?: string
     userRole?: string
+    userStatus?: string
+    tokenQuota?: number
+    usedTokens?: number
     createTime?: string
+  }
+
+  // 阶段五新增类型定义
+
+  type QuotaVO = {
+    tokenQuota?: number
+    usedTokens?: number
+    remainingQuota?: number
+  }
+
+  type QuotaUpdateRequest = {
+    userId?: number
+    tokenQuota?: number
+  }
+
+  type CostStatsVO = {
+    totalCost?: number
+    todayCost?: number
+  }
+
+  type UserSummaryStatsVO = {
+    totalTokens?: number
+    tokenQuota?: number
+    usedTokens?: number
+    remainingQuota?: number
+    totalCost?: number
+    todayCost?: number
+    totalRequests?: number
+    successRequests?: number
+  }
+
+  type UserAnalysisVO = {
+    userId?: number
+    userAccount?: string
+    userName?: string
+    userStatus?: string
+    userRole?: string
+    tokenQuota?: number
+    usedTokens?: number
+    remainingQuota?: number
+    totalRequests?: number
+    successRequests?: number
+    totalTokens?: number
+    totalCost?: number
+    todayCost?: number
+  }
+
+  type RequestLogQueryRequest = {
+    pageNum?: number
+    pageSize?: number
+    sortField?: string
+    sortOrder?: string
+    userId?: number
+    requestModel?: string
+    requestType?: string
+    source?: string
+    status?: string
+    startDate?: string
+    endDate?: string
+  }
+
+  type PageRequestLog = {
+    records?: RequestLog[]
+    pageNumber?: number
+    pageSize?: number
+    totalPage?: number
+    totalRow?: number
+    optimizeCountQuery?: boolean
+  }
+
+  type BaseResponseQuotaVO = {
+    code?: number
+    data?: QuotaVO
+    message?: string
+  }
+
+  type BaseResponseCostStatsVO = {
+    code?: number
+    data?: CostStatsVO
+    message?: string
+  }
+
+  type BaseResponseUserSummaryStatsVO = {
+    code?: number
+    data?: UserSummaryStatsVO
+    message?: string
+  }
+
+  type BaseResponseUserAnalysisVO = {
+    code?: number
+    data?: UserAnalysisVO
+    message?: string
+  }
+
+  type BaseResponsePageRequestLog = {
+    code?: number
+    data?: PageRequestLog
+    message?: string
+  }
+
+  type BaseResponseRequestLog = {
+    code?: number
+    data?: RequestLog
+    message?: string
+  }
+
+  type BaseResponseListMapStringObject = {
+    code?: number
+    data?: Record<string, any>[]
+    message?: string
   }
 }
