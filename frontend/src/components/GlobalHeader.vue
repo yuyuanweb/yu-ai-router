@@ -63,6 +63,7 @@ import {
   StopOutlined,
   UserOutlined,
   HistoryOutlined,
+  PictureOutlined,
 } from '@ant-design/icons-vue'
 
 const loginUserStore = useLoginUserStore()
@@ -87,6 +88,12 @@ const originItems = [
     icon: () => h(CommentOutlined),
     label: 'AI 对话',
     title: 'AI 对话',
+  },
+  {
+    key: '/image',
+    icon: () => h(PictureOutlined),
+    label: 'AI 绘图',
+    title: 'AI 绘图',
   },
   {
     key: '/user/apikey',

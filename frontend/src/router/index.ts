@@ -12,6 +12,7 @@ import ProfilePage from '@/pages/user/ProfilePage.vue'
 import CallHistoryPage from '@/pages/user/CallHistoryPage.vue'
 import RechargeSuccessPage from '@/pages/user/RechargeSuccessPage.vue'
 import RechargeCancelPage from '@/pages/user/RechargeCancelPage.vue'
+import ImageGenerationPage from '@/pages/ImageGenerationPage.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -25,6 +26,11 @@ const router = createRouter({
       path: '/chat',
       name: 'AI 对话',
       component: ChatPage,
+    },
+    {
+      path: '/image',
+      name: 'AI 绘图',
+      component: ImageGenerationPage,
     },
     {
       path: '/user/apikey',

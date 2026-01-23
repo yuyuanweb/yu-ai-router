@@ -649,4 +649,60 @@ declare namespace API {
     data?: CreateRechargeResponse
     message?: string
   }
+
+  // 阶段七新增类型定义（AI绘图）
+
+  type ImageGenerationRequest = {
+    prompt?: string
+    model?: string
+    n?: number
+    size?: string
+    quality?: string
+    response_format?: string
+  }
+
+  type ImageData = {
+    url?: string
+    b64Json?: string
+    revisedPrompt?: string
+  }
+
+  type ImageGenerationResponse = {
+    created?: number
+    data?: ImageData[]
+  }
+
+  type ImageGenerationRecord = {
+    id?: number
+    userId?: number
+    apiKeyId?: number
+    modelId?: number
+    modelKey?: string
+    prompt?: string
+    revisedPrompt?: string
+    imageUrl?: string
+    imageData?: string
+    size?: string
+    quality?: string
+    status?: string
+    cost?: number
+    duration?: number
+    errorMessage?: string
+    clientIp?: string
+    createTime?: string
+  }
+
+  type PageImageGenerationRecord = {
+    records?: ImageGenerationRecord[]
+    pageNumber?: number
+    pageSize?: number
+    totalPage?: number
+    totalRow?: number
+  }
+
+  type BaseResponsePageImageGenerationRecord = {
+    code?: number
+    data?: PageImageGenerationRecord
+    message?: string
+  }
 }
