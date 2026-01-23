@@ -37,6 +37,13 @@ server:
     session:
       cookie:
         max-age: 2592000
+# AI 网关配置
+ai:
+  cache:
+    # 是否启用响应缓存
+    enabled: true
+    # 缓存过期时间（秒），默认1小时
+    ttl: 3600
 # springdoc-openapi 配置
 springdoc:
   group-configs:

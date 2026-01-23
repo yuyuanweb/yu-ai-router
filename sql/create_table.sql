@@ -17,12 +17,16 @@ create table if not exists user
     userAvatar   varchar(1024)                          null comment '用户头像',
     userProfile  varchar(512)                           null comment '用户简介',
     userRole     varchar(256) default 'user'            not null comment '用户角色：user/admin',
+    userStatus   varchar(32)  default 'active'          not null comment '用户状态：active/disabled',
+    tokenQuota   bigint       default -1               not null comment 'Token配额（-1表示无限制）',
+    usedTokens   bigint       default 0                not null comment '已使用Token数',
     editTime     datetime     default CURRENT_TIMESTAMP not null comment '编辑时间',
     createTime   datetime     default CURRENT_TIMESTAMP not null comment '创建时间',
     updateTime   datetime     default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP comment '更新时间',
     isDelete     tinyint      default 0                 not null comment '是否删除',
     UNIQUE KEY uk_userAccount (userAccount),
-    INDEX idx_userName (userName)
+    INDEX idx_userName (userName),
+    INDEX idx_userStatus (userStatus)
 ) comment '用户' collate = utf8mb4_unicode_ci;
 
 -- API Key 表
@@ -58,6 +62,7 @@ create table if not exists request_log
     promptTokens     int         default 0                 not null comment '输入Token数',
     completionTokens int         default 0                 not null comment '输出Token数',
     totalTokens      int         default 0                 not null comment '总Token数',
+    cost             decimal(12,6) default 0               not null comment '本次请求费用（元）',
     duration         int         default 0                 not null comment '请求耗时（毫秒）',
     status           varchar(32) default 'success'         not null comment '状态：success/failed',
     errorMessage     text                                  null comment '错误信息',
@@ -131,10 +136,10 @@ create table if not exists model
 
 -- 初始化用户数据
 -- 密码是 12345678（MD5 加密 + 盐值 yupi）
-INSERT INTO user (id, userAccount, userPassword, userName, userAvatar, userProfile, userRole)
-VALUES (1, 'admin', '10670d38ec32fa8102be6a37f8cb52bf', '管理员', 'https://www.codefather.cn/logo.png', '系统管理员', 'admin'),
-       (2, 'user', '10670d38ec32fa8102be6a37f8cb52bf', '普通用户', 'https://www.codefather.cn/logo.png', '我是一个普通用户', 'user'),
-       (3, 'test', '10670d38ec32fa8102be6a37f8cb52bf', '测试账号', 'https://www.codefather.cn/logo.png', '这是一个测试账号', 'user');
+INSERT INTO user (id, userAccount, userPassword, userName, userAvatar, userProfile, userRole, tokenQuota)
+VALUES (1, 'admin', '10670d38ec32fa8102be6a37f8cb52bf', '管理员', 'https://www.codefather.cn/logo.png', '系统管理员', 'admin', -1),
+       (2, 'user', '10670d38ec32fa8102be6a37f8cb52bf', '普通用户', 'https://www.codefather.cn/logo.png', '我是一个普通用户', 'user', 100000),
+       (3, 'test', '10670d38ec32fa8102be6a37f8cb52bf', '测试账号', 'https://www.codefather.cn/logo.png', '这是一个测试账号', 'user', 50000);
 
 -- 初始化模型提供者数据
 INSERT INTO model_provider (providerName, displayName, baseUrl, apiKey, status, priority)

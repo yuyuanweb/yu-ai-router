@@ -12,7 +12,14 @@ import com.yupi.airouter.model.dto.chat.StreamResponse;
 import com.yupi.airouter.model.dto.log.RequestLogDTO;
 import com.yupi.airouter.model.entity.Model;
 import com.yupi.airouter.model.entity.ModelProvider;
-import com.yupi.airouter.service.*;
+import com.yupi.airouter.service.CacheService;
+import com.yupi.airouter.service.ChatService;
+import com.yupi.airouter.service.ModelInvokeService;
+import com.yupi.airouter.service.ModelProviderService;
+import com.yupi.airouter.service.QuotaService;
+import com.yupi.airouter.service.RequestLogService;
+import com.yupi.airouter.service.RoutingService;
+import com.yupi.airouter.service.UserService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -41,6 +48,15 @@ public class ChatServiceImpl implements ChatService {
     @Resource
     private RequestLogService requestLogService;
 
+    @Resource
+    private QuotaService quotaService;
+
+    @Resource
+    private CacheService cacheService;
+
+    @Resource
+    private UserService userService;
+
     /**
      * 最大 Fallback 重试次数
      */
@@ -51,6 +67,43 @@ public class ChatServiceImpl implements ChatService {
         long startTime = System.currentTimeMillis();
         String requestedModel = chatRequest.getModel();
         String traceId = IdUtil.simpleUUID();
+
+        // 检查用户状态
+        if (userId != null && userService.isUserDisabled(userId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN_ERROR, "账号已被禁用，无法使用服务");
+        }
+
+        // 检查用户配额
+        if (userId != null && !quotaService.checkQuota(userId)) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "Token配额已用尽，请联系管理员增加配额");
+        }
+
+        // 尝试从缓存获取响应
+        var cachedResponse = cacheService.getCachedResponse(chatRequest);
+        if (cachedResponse.isPresent()) {
+            log.info("命中缓存，直接返回");
+            ChatResponse response = cachedResponse.get();
+            // 记录缓存命中的日志（不扣减配额和费用）
+            long duration = System.currentTimeMillis() - startTime;
+            requestLogService.logRequest(RequestLogDTO.builder()
+                    .traceId(traceId)
+                    .userId(userId)
+                    .apiKeyId(apiKeyId)
+                    .requestModel(requestedModel != null ? requestedModel : response.getModel())
+                    .requestType("chat")
+                    .source(apiKeyId != null ? "api" : "web")
+                    .promptTokens(0)
+                    .completionTokens(0)
+                    .totalTokens(0)
+                    .duration((int) duration)
+                    .status("success")
+                    .routingStrategy("cache")
+                    .isFallback(false)
+                    .clientIp(clientIp)
+                    .userAgent(userAgent)
+                    .build());
+            return response;
+        }
 
         // 确定路由策略：优先使用请求中指定的策略，否则根据是否指定模型决定
         String strategyType = determineStrategyType(chatRequest.getRoutingStrategy(), requestedModel);
@@ -151,6 +204,7 @@ public class ChatServiceImpl implements ChatService {
 
             // 记录请求日志
             long duration = System.currentTimeMillis() - startTime;
+            int totalTokens = response.getUsage().getTotalTokens();
             requestLogService.logRequest(RequestLogDTO.builder()
                     .traceId(traceId)
                     .userId(userId)
@@ -161,7 +215,7 @@ public class ChatServiceImpl implements ChatService {
                     .source(apiKeyId != null ? "api" : "web")
                     .promptTokens(response.getUsage().getPromptTokens())
                     .completionTokens(response.getUsage().getCompletionTokens())
-                    .totalTokens(response.getUsage().getTotalTokens())
+                    .totalTokens(totalTokens)
                     .duration((int) duration)
                     .status("success")
                     .routingStrategy(strategyType)
@@ -169,6 +223,14 @@ public class ChatServiceImpl implements ChatService {
                     .clientIp(clientIp)
                     .userAgent(userAgent)
                     .build());
+
+            // 扣减用户配额
+            if (userId != null && totalTokens > 0) {
+                quotaService.deductTokens(userId, totalTokens);
+            }
+
+            // 缓存响应
+            cacheService.cacheResponse(chatRequest, response);
 
             return response;
         } catch (Exception e) {
@@ -201,6 +263,16 @@ public class ChatServiceImpl implements ChatService {
         long startTime = System.currentTimeMillis();
         String traceId = IdUtil.simpleUUID();
         long created = System.currentTimeMillis() / 1000;
+
+        // 检查用户状态
+        if (userId != null && userService.isUserDisabled(userId)) {
+            return Flux.error(new BusinessException(ErrorCode.FORBIDDEN_ERROR, "账号已被禁用，无法使用服务"));
+        }
+
+        // 检查用户配额
+        if (userId != null && !quotaService.checkQuota(userId)) {
+            return Flux.error(new BusinessException(ErrorCode.OPERATION_ERROR, "Token配额已用尽，请联系管理员增加配额"));
+        }
 
         // Token 计数器
         final int[] promptTokens = {0};
@@ -314,6 +386,11 @@ public class ChatServiceImpl implements ChatService {
                         .clientIp(clientIp)
                         .userAgent(userAgent)
                         .build());
+                
+                // 扣减用户配额
+                if (userId != null && totalTokens > 0) {
+                    quotaService.deductTokens(userId, totalTokens);
+                }
             }).doOnError(error -> {
                 // 流错误时记录日志
                 log.error("流式调用模型失败", error);

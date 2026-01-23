@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 
 import java.io.Serial;
 import java.io.Serializable;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -100,6 +101,12 @@ public class RequestLog implements Serializable {
      */
     @Column("totalTokens")
     private Integer totalTokens;
+
+    /**
+     * 本次请求费用（元）
+     */
+    @Column("cost")
+    private BigDecimal cost;
 
     /**
      * 请求耗时（毫秒）

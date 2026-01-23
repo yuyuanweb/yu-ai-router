@@ -11,6 +11,7 @@ import com.yupi.airouter.model.dto.user.UserQueryRequest;
 import com.yupi.airouter.model.entity.User;
 import com.yupi.airouter.mapper.UserMapper;
 import com.yupi.airouter.model.enums.UserRoleEnum;
+import com.yupi.airouter.model.enums.UserStatusEnum;
 import com.yupi.airouter.model.vo.LoginUserVO;
 import com.yupi.airouter.model.vo.UserVO;
 import com.yupi.airouter.service.UserService;
@@ -102,9 +103,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         if (user == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户不存在或密码错误");
         }
-        // 4. 如果用户存在，记录用户的登录态
+        // 4. 检查用户状态
+        if (UserStatusEnum.DISABLED.getValue().equals(user.getUserStatus())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN_ERROR, "账号已被禁用，请联系管理员");
+        }
+        // 5. 如果用户存在，记录用户的登录态
         request.getSession().setAttribute(USER_LOGIN_STATE, user);
-        // 5. 返回脱敏的用户信息
+        // 6. 返回脱敏的用户信息
         return this.getLoginUserVO(user);
     }
 
@@ -183,5 +188,39 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         // 盐值，混淆密码
         final String SALT = "yupi";
         return DigestUtils.md5DigestAsHex((userPassword + SALT).getBytes(StandardCharsets.UTF_8));
+    }
+
+    @Override
+    public boolean isUserDisabled(Long userId) {
+        if (userId == null) {
+            return false;
+        }
+        User user = this.getById(userId);
+        if (user == null) {
+            return true; // 用户不存在，视为禁用
+        }
+        return UserStatusEnum.DISABLED.getValue().equals(user.getUserStatus());
+    }
+
+    @Override
+    public boolean disableUser(Long userId) {
+        if (userId == null) {
+            return false;
+        }
+        User user = new User();
+        user.setId(userId);
+        user.setUserStatus(UserStatusEnum.DISABLED.getValue());
+        return this.updateById(user);
+    }
+
+    @Override
+    public boolean enableUser(Long userId) {
+        if (userId == null) {
+            return false;
+        }
+        User user = new User();
+        user.setId(userId);
+        user.setUserStatus(UserStatusEnum.ACTIVE.getValue());
+        return this.updateById(user);
     }
 }

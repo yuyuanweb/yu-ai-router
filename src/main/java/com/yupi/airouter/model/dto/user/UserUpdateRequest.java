@@ -6,6 +6,8 @@ import java.io.Serializable;
 
 /**
  * 用户更新请求
+ *
+ * @author <a href="https://codefather.cn">编程导航学习圈</a>
  */
 @Data
 public class UserUpdateRequest implements Serializable {
@@ -34,6 +36,11 @@ public class UserUpdateRequest implements Serializable {
      * 用户角色：user/admin
      */
     private String userRole;
+
+    /**
+     * Token配额（-1表示无限制）
+     */
+    private Long tokenQuota;
 
     private static final long serialVersionUID = 1L;
 }

@@ -5,6 +5,7 @@ import lombok.Data;
 
 import java.io.Serial;
 import java.io.Serializable;
+import java.math.BigDecimal;
 
 /**
  * 请求日志记录对象
@@ -67,6 +68,11 @@ public class RequestLogDTO implements Serializable {
      * 总Token数
      */
     private Integer totalTokens;
+
+    /**
+     * 本次请求费用（元）
+     */
+    private BigDecimal cost;
 
     /**
      * 请求耗时（毫秒）

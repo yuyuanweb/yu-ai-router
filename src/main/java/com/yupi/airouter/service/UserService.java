@@ -91,4 +91,28 @@ public interface UserService extends IService<User> {
      * @return 加密后的用户密码
      */
     String getEncryptPassword(String userPassword);
+
+    /**
+     * 检查用户是否被禁用
+     *
+     * @param userId 用户ID
+     * @return true-被禁用，false-正常
+     */
+    boolean isUserDisabled(Long userId);
+
+    /**
+     * 禁用用户
+     *
+     * @param userId 用户ID
+     * @return 操作是否成功
+     */
+    boolean disableUser(Long userId);
+
+    /**
+     * 启用用户
+     *
+     * @param userId 用户ID
+     * @return 操作是否成功
+     */
+    boolean enableUser(Long userId);
 }
