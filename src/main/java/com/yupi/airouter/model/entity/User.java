@@ -5,6 +5,7 @@ import com.mybatisflex.annotation.Id;
 import com.mybatisflex.annotation.KeyType;
 import com.mybatisflex.annotation.Table;
 import java.io.Serializable;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import java.io.Serial;
@@ -89,6 +90,12 @@ public class User implements Serializable {
      */
     @Column("usedTokens")
     private Long usedTokens;
+
+    /**
+     * 账户余额（元）
+     */
+    @Column("balance")
+    private BigDecimal balance;
 
     /**
      * 编辑时间

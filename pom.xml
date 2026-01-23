@@ -99,6 +99,12 @@
             <artifactId>hutool-all</artifactId>
             <version>5.8.43</version>
         </dependency>
+        <!-- Stripe Java SDK -->
+        <dependency>
+            <groupId>com.stripe</groupId>
+            <artifactId>stripe-java</artifactId>
+            <version>31.2.0</version>
+        </dependency>
         <!-- Resilience4j 熔断器 -->
         <dependency>
             <groupId>io.github.resilience4j</groupId>

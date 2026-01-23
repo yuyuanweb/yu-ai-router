@@ -12,6 +12,8 @@ import com.yupi.airouter.model.dto.chat.StreamResponse;
 import com.yupi.airouter.model.dto.log.RequestLogDTO;
 import com.yupi.airouter.model.entity.Model;
 import com.yupi.airouter.model.entity.ModelProvider;
+import com.yupi.airouter.service.BalanceService;
+import com.yupi.airouter.service.BillingService;
 import com.yupi.airouter.service.CacheService;
 import com.yupi.airouter.service.ChatService;
 import com.yupi.airouter.service.ModelInvokeService;
@@ -57,6 +59,12 @@ public class ChatServiceImpl implements ChatService {
     @Resource
     private UserService userService;
 
+    @Resource
+    private BalanceService balanceService;
+
+    @Resource
+    private BillingService billingService;
+
     /**
      * 最大 Fallback 重试次数
      */
@@ -76,6 +84,15 @@ public class ChatServiceImpl implements ChatService {
         // 检查用户配额
         if (userId != null && !quotaService.checkQuota(userId)) {
             throw new BusinessException(ErrorCode.OPERATION_ERROR, "Token配额已用尽，请联系管理员增加配额");
+        }
+        
+        // 检查用户余额（预估检查，实际扣减在调用成功后）
+        if (userId != null) {
+            java.math.BigDecimal currentBalance = balanceService.getUserBalance(userId);
+            if (currentBalance.compareTo(java.math.BigDecimal.ZERO) <= 0) {
+                throw new BusinessException(ErrorCode.OPERATION_ERROR, 
+                        "账户余额不足，当前余额：¥" + currentBalance + "，请先充值");
+            }
         }
 
         // 尝试从缓存获取响应
@@ -224,9 +241,24 @@ public class ChatServiceImpl implements ChatService {
                     .userAgent(userAgent)
                     .build());
 
-            // 扣减用户配额
+            // 扣减用户配额和余额
             if (userId != null && totalTokens > 0) {
                 quotaService.deductTokens(userId, totalTokens);
+                
+                // 计算费用并扣减余额
+                java.math.BigDecimal cost = billingService.calculateCost(
+                        model,
+                        response.getUsage().getPromptTokens(),
+                        response.getUsage().getCompletionTokens()
+                );
+                
+                if (cost.compareTo(java.math.BigDecimal.ZERO) > 0) {
+                    // 根据来源区分描述
+                    String description = apiKeyId != null 
+                            ? "API调用消费 - " + model.getModelKey()
+                            : "网页调用消费 - " + model.getModelKey();
+                    balanceService.deductBalance(userId, cost, null, description);
+                }
             }
 
             // 缓存响应
@@ -272,6 +304,15 @@ public class ChatServiceImpl implements ChatService {
         // 检查用户配额
         if (userId != null && !quotaService.checkQuota(userId)) {
             return Flux.error(new BusinessException(ErrorCode.OPERATION_ERROR, "Token配额已用尽，请联系管理员增加配额"));
+        }
+        
+        // 检查用户余额（预估检查）
+        if (userId != null) {
+            java.math.BigDecimal currentBalance = balanceService.getUserBalance(userId);
+            if (currentBalance.compareTo(java.math.BigDecimal.ZERO) <= 0) {
+                return Flux.error(new BusinessException(ErrorCode.OPERATION_ERROR, 
+                        "账户余额不足，当前余额：¥" + currentBalance + "，请先充值"));
+            }
         }
 
         // Token 计数器
@@ -387,9 +428,24 @@ public class ChatServiceImpl implements ChatService {
                         .userAgent(userAgent)
                         .build());
                 
-                // 扣减用户配额
+                // 扣减用户配额和余额
                 if (userId != null && totalTokens > 0) {
                     quotaService.deductTokens(userId, totalTokens);
+                    
+                    // 计算费用并扣减余额
+                    java.math.BigDecimal cost = billingService.calculateCost(
+                            selectedModel,
+                            promptTokens[0],
+                            completionTokens[0]
+                    );
+                    
+                    if (cost.compareTo(java.math.BigDecimal.ZERO) > 0) {
+                        // 根据来源区分描述
+                        String description = apiKeyId != null 
+                                ? "API调用消费（流式） - " + selectedModel.getModelKey()
+                                : "网页调用消费（流式） - " + selectedModel.getModelKey();
+                        balanceService.deductBalance(userId, cost, null, description);
+                    }
                 }
             }).doOnError(error -> {
                 // 流错误时记录日志

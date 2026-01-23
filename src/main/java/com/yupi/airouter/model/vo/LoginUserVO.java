@@ -3,6 +3,7 @@ package com.yupi.airouter.model.vo;
 import lombok.Data;
 
 import java.io.Serializable;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -57,6 +58,11 @@ public class LoginUserVO implements Serializable {
      * 已使用Token数
      */
     private Long usedTokens;
+
+    /**
+     * 账户余额（元）
+     */
+    private BigDecimal balance;
 
     /**
      * 创建时间

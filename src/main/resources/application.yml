@@ -44,6 +44,11 @@ ai:
     enabled: true
     # 缓存过期时间（秒），默认1小时
     ttl: 3600
+stripe:
+  api-key: sk_test_51SsdkB2cAZC2ATNgs5x0hSyh2g3bE3Ys4lgxTn22QF4Ep3ek0QfxwUU9ZG4N04EF6T7vzMCtjDKKDeFof7j3995T00ysHZ0uuc
+  webhook-secret: whsec_6c936e95bc9112c5453f083d083dbdd01c464eaebccde119ee5637142d18beb4
+  success-url: http://localhost:5173/recharge/success  # 支付成功回调（前端页面）
+  cancel-url: http://localhost:5173/recharge/cancel   # 支付取消回调（前端页面）
 # springdoc-openapi 配置
 springdoc:
   group-configs:
