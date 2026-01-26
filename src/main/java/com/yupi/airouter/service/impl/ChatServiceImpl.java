@@ -24,6 +24,7 @@ import com.yupi.airouter.service.PluginService;
 import com.yupi.airouter.service.QuotaService;
 import com.yupi.airouter.service.RequestLogService;
 import com.yupi.airouter.service.RoutingService;
+import com.yupi.airouter.service.UserProviderKeyService;
 import com.yupi.airouter.service.UserService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -72,6 +73,9 @@ public class ChatServiceImpl implements ChatService {
     @Resource
     private PluginService pluginService;
 
+    @Resource
+    private UserProviderKeyService userProviderKeyService;
+
     /**
      * 最大 Fallback 重试次数
      */
@@ -88,23 +92,44 @@ public class ChatServiceImpl implements ChatService {
             throw new BusinessException(ErrorCode.FORBIDDEN_ERROR, "账号已被禁用，无法使用服务");
         }
 
-        // 检查用户配额
-        if (userId != null && !quotaService.checkQuota(userId)) {
-            throw new BusinessException(ErrorCode.OPERATION_ERROR, "Token配额已用尽，请联系管理员增加配额");
-        }
-        
-        // 检查用户余额（预估检查，实际扣减在调用成功后）
-        if (userId != null) {
-            java.math.BigDecimal currentBalance = balanceService.getUserBalance(userId);
-            if (currentBalance.compareTo(java.math.BigDecimal.ZERO) <= 0) {
-                throw new BusinessException(ErrorCode.OPERATION_ERROR, 
-                        "账户余额不足，当前余额：¥" + currentBalance + "，请先充值");
-            }
-        }
-
         // 如果指定了插件，先执行插件获取上下文，然后注入到消息中
         if (StrUtil.isNotBlank(chatRequest.getPluginKey())) {
             chatRequest = injectPluginContext(chatRequest, userId);
+        }
+
+        // 确定路由策略：优先使用请求中指定的策略，否则根据是否指定模型决定
+        String strategyType = determineStrategyType(chatRequest.getRoutingStrategy(), requestedModel);
+
+        // 选择模型
+        Model selectedModel = routingService.selectModel(strategyType, "chat", requestedModel);
+
+        if (selectedModel == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "没有可用的模型");
+        }
+
+        // 检查用户是否配置了 BYOK（提前检查，避免不必要的余额检查）
+        boolean willUseByok = false;
+        if (userId != null) {
+            willUseByok = userProviderKeyService.hasUserProviderKey(userId, selectedModel.getProviderId());
+        }
+
+        // BYOK 模式下不检查配额和余额
+        if (!willUseByok) {
+            // 检查用户配额
+            if (userId != null && !quotaService.checkQuota(userId)) {
+                throw new BusinessException(ErrorCode.OPERATION_ERROR, "Token配额已用尽，请联系管理员增加配额");
+            }
+
+            // 检查用户余额（预估检查，实际扣减在调用成功后）
+            if (userId != null) {
+                java.math.BigDecimal currentBalance = balanceService.getUserBalance(userId);
+                if (currentBalance.compareTo(java.math.BigDecimal.ZERO) <= 0) {
+                    throw new BusinessException(ErrorCode.OPERATION_ERROR,
+                            "账户余额不足，当前余额：¥" + currentBalance + "，请先充值");
+                }
+            }
+        } else {
+            log.info("BYOK 模式：用户 {} 跳过余额和配额检查", userId);
         }
 
         // 尝试从缓存获取响应
@@ -132,16 +157,6 @@ public class ChatServiceImpl implements ChatService {
                     .userAgent(userAgent)
                     .build());
             return response;
-        }
-
-        // 确定路由策略：优先使用请求中指定的策略，否则根据是否指定模型决定
-        String strategyType = determineStrategyType(chatRequest.getRoutingStrategy(), requestedModel);
-
-        // 选择模型
-        Model selectedModel = routingService.selectModel(strategyType, "chat", requestedModel);
-
-        if (selectedModel == null) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "没有可用的模型");
         }
 
         // 获取 Fallback 模型列表
@@ -223,6 +238,27 @@ public class ChatServiceImpl implements ChatService {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "模型提供者不存在");
         }
 
+        // 检查用户是否配置了 BYOK（用户自带密钥）
+        boolean isByok = false;
+        if (userId != null) {
+            String userApiKey = userProviderKeyService.getUserProviderApiKey(userId, model.getProviderId());
+            if (userApiKey != null) {
+                // 使用用户自己的密钥（BYOK 模式）
+                provider = ModelProvider.builder()
+                        .id(provider.getId())
+                        .providerName(provider.getProviderName())
+                        .displayName(provider.getDisplayName())
+                        .baseUrl(provider.getBaseUrl())
+                        // 使用用户的密钥
+                        .apiKey(userApiKey)
+                        .status(provider.getStatus())
+                        .priority(provider.getPriority())
+                        .build();
+                isByok = true;
+                log.info("用户 {} 使用 BYOK 模式调用模型 {}", userId, model.getModelKey());
+            }
+        }
+
         try {
             // 调用模型
             org.springframework.ai.chat.model.ChatResponse aiResponse =
@@ -253,24 +289,26 @@ public class ChatServiceImpl implements ChatService {
                     .userAgent(userAgent)
                     .build());
 
-            // 扣减用户配额和余额
-            if (userId != null && totalTokens > 0) {
+            // 扣减用户配额和余额（BYOK 模式下免费，不扣减）
+            if (userId != null && totalTokens > 0 && !isByok) {
                 quotaService.deductTokens(userId, totalTokens);
-                
+
                 // 计算费用并扣减余额
                 java.math.BigDecimal cost = billingService.calculateCost(
                         model,
                         response.getUsage().getPromptTokens(),
                         response.getUsage().getCompletionTokens()
                 );
-                
+
                 if (cost.compareTo(java.math.BigDecimal.ZERO) > 0) {
                     // 根据来源区分描述
-                    String description = apiKeyId != null 
+                    String description = apiKeyId != null
                             ? "API调用消费 - " + model.getModelKey()
                             : "网页调用消费 - " + model.getModelKey();
                     balanceService.deductBalance(userId, cost, null, description);
                 }
+            } else if (isByok) {
+                log.info("BYOK 模式：用户 {} 使用自己的密钥，不扣减余额和配额", userId);
             }
 
             // 缓存响应
@@ -313,20 +351,6 @@ public class ChatServiceImpl implements ChatService {
             return Flux.error(new BusinessException(ErrorCode.FORBIDDEN_ERROR, "账号已被禁用，无法使用服务"));
         }
 
-        // 检查用户配额
-        if (userId != null && !quotaService.checkQuota(userId)) {
-            return Flux.error(new BusinessException(ErrorCode.OPERATION_ERROR, "Token配额已用尽，请联系管理员增加配额"));
-        }
-        
-        // 检查用户余额（预估检查）
-        if (userId != null) {
-            java.math.BigDecimal currentBalance = balanceService.getUserBalance(userId);
-            if (currentBalance.compareTo(java.math.BigDecimal.ZERO) <= 0) {
-                return Flux.error(new BusinessException(ErrorCode.OPERATION_ERROR, 
-                        "账户余额不足，当前余额：¥" + currentBalance + "，请先充值"));
-            }
-        }
-
         // 如果指定了插件，先执行插件获取上下文，然后注入到消息中
         if (StrUtil.isNotBlank(chatRequest.getPluginKey())) {
             chatRequest = injectPluginContext(chatRequest, userId);
@@ -354,138 +378,179 @@ public class ChatServiceImpl implements ChatService {
                 return Flux.error(new BusinessException(ErrorCode.PARAMS_ERROR, "模型提供者不存在"));
             }
 
+            // 检查用户是否配置了 BYOK（用户自带密钥）
+            final boolean[] isByok = {false};
+            if (userId != null) {
+                String userApiKey = userProviderKeyService.getUserProviderApiKey(userId, selectedModel.getProviderId());
+                if (userApiKey != null) {
+                    // 使用用户自己的密钥（BYOK 模式）
+                    provider = ModelProvider.builder()
+                            .id(provider.getId())
+                            .providerName(provider.getProviderName())
+                            .displayName(provider.getDisplayName())
+                            .baseUrl(provider.getBaseUrl())
+                            .apiKey(userApiKey)  // 使用用户的密钥
+                            .status(provider.getStatus())
+                            .priority(provider.getPriority())
+                            .build();
+                    isByok[0] = true;
+                    log.info("用户 {} 使用 BYOK 模式调用流式模型 {}", userId, selectedModel.getModelKey());
+                }
+            }
+
+            // BYOK 模式下不检查配额和余额
+            if (!isByok[0]) {
+                // 检查用户配额
+                if (userId != null && !quotaService.checkQuota(userId)) {
+                    return Flux.error(new BusinessException(ErrorCode.OPERATION_ERROR, "Token配额已用尽，请联系管理员增加配额"));
+                }
+
+                // 检查用户余额（预估检查）
+                if (userId != null) {
+                    java.math.BigDecimal currentBalance = balanceService.getUserBalance(userId);
+                    if (currentBalance.compareTo(java.math.BigDecimal.ZERO) <= 0) {
+                        return Flux.error(new BusinessException(ErrorCode.OPERATION_ERROR,
+                                "账户余额不足，当前余额：¥" + currentBalance + "，请先充值"));
+                    }
+                }
+            } else {
+                log.info("BYOK 模式：跳过余额和配额检查");
+            }
+
             // 调用流式模型，获取统一格式的响应块
             Flux<StreamChunk> chunkFlux = modelInvokeService.invokeStreamChunk(selectedModel, provider, chatRequest);
 
             // 将统一格式的响应块转换为 OpenAI SSE 格式的 StreamResponse
             return chunkFlux.flatMap(chunk -> {
-                // 更新 Token 统计
-                if (chunk.getPromptTokens() != null && chunk.getPromptTokens() > 0) {
-                    promptTokens[0] = chunk.getPromptTokens();
-                }
-                if (chunk.getCompletionTokens() != null && chunk.getCompletionTokens() > 0) {
-                    completionTokens[0] = chunk.getCompletionTokens();
-                }
+                        // 更新 Token 统计
+                        if (chunk.getPromptTokens() != null && chunk.getPromptTokens() > 0) {
+                            promptTokens[0] = chunk.getPromptTokens();
+                        }
+                        if (chunk.getCompletionTokens() != null && chunk.getCompletionTokens() > 0) {
+                            completionTokens[0] = chunk.getCompletionTokens();
+                        }
 
-                // 构建 Delta
-                StreamResponse.Delta.DeltaBuilder deltaBuilder = StreamResponse.Delta.builder();
+                        // 构建 Delta
+                        StreamResponse.Delta.DeltaBuilder deltaBuilder = StreamResponse.Delta.builder();
 
-                // 第一个块包含 role
-                if (isFirstChunk[0]) {
-                    deltaBuilder.role("assistant");
-                    isFirstChunk[0] = false;
-                }
+                        // 第一个块包含 role
+                        if (isFirstChunk[0]) {
+                            deltaBuilder.role("assistant");
+                            isFirstChunk[0] = false;
+                        }
 
-                // 处理普通文本内容
-                if (chunk.hasText()) {
-                    deltaBuilder.content(chunk.getText());
-                }
+                        // 处理普通文本内容
+                        if (chunk.hasText()) {
+                            deltaBuilder.content(chunk.getText());
+                        }
 
-                // 处理深度思考内容
-                if (chunk.hasReasoningContent()) {
-                    deltaBuilder.reasoningContent(chunk.getReasoningContent());
-                }
+                        // 处理深度思考内容
+                        if (chunk.hasReasoningContent()) {
+                            deltaBuilder.reasoningContent(chunk.getReasoningContent());
+                        }
 
-                // 如果既没有文本也没有思考内容，跳过
-                if (!chunk.hasText() && !chunk.hasReasoningContent()) {
-                    return Flux.empty();
-                }
+                        // 如果既没有文本也没有思考内容，跳过
+                        if (!chunk.hasText() && !chunk.hasReasoningContent()) {
+                            return Flux.empty();
+                        }
 
-                StreamResponse.Delta delta = deltaBuilder.build();
+                        StreamResponse.Delta delta = deltaBuilder.build();
 
-                StreamResponse.StreamChoice choice = StreamResponse.StreamChoice.builder()
-                        .index(0)
-                        .delta(delta)
-                        .finishReason(null)
-                        .build();
+                        StreamResponse.StreamChoice choice = StreamResponse.StreamChoice.builder()
+                                .index(0)
+                                .delta(delta)
+                                .finishReason(null)
+                                .build();
 
-                return Flux.just(StreamResponse.builder()
-                        .id(traceId)
-                        .object("chat.completion.chunk")
-                        .created(created)
-                        .model(selectedModel.getModelKey())
-                        .choices(List.of(choice))
-                        .build());
-            })
-            // 在流结束时追加一个带 finishReason: "stop" 的结束标识
-            .concatWith(Flux.defer(() -> {
-                StreamResponse.StreamChoice finishChoice = StreamResponse.StreamChoice.builder()
-                        .index(0)
-                        .delta(StreamResponse.Delta.builder().build())
-                        .finishReason("stop")
-                        .build();
-                return Flux.just(StreamResponse.builder()
-                        .id(traceId)
-                        .object("chat.completion.chunk")
-                        .created(created)
-                        .model(selectedModel.getModelKey())
-                        .choices(List.of(finishChoice))
-                        .build());
-            }))
-            .doOnComplete(() -> {
-                // 流结束时记录日志
-                long duration = System.currentTimeMillis() - startTime;
-                int totalTokens = promptTokens[0] + completionTokens[0];
-                requestLogService.logRequest(RequestLogDTO.builder()
-                        .traceId(traceId)
-                        .userId(userId)
-                        .apiKeyId(apiKeyId)
-                        .modelId(selectedModel.getId())
-                        .requestModel(selectedModel.getModelKey())
-                        .requestType("chat")
-                        .source(apiKeyId != null ? "api" : "web")
-                        .promptTokens(promptTokens[0])
-                        .completionTokens(completionTokens[0])
-                        .totalTokens(totalTokens)
-                        .duration((int) duration)
-                        .status("success")
-                        .routingStrategy(strategyType)
-                        .isFallback(false)
-                        .clientIp(clientIp)
-                        .userAgent(userAgent)
-                        .build());
-                
-                // 扣减用户配额和余额
-                if (userId != null && totalTokens > 0) {
+                        return Flux.just(StreamResponse.builder()
+                                .id(traceId)
+                                .object("chat.completion.chunk")
+                                .created(created)
+                                .model(selectedModel.getModelKey())
+                                .choices(List.of(choice))
+                                .build());
+                    })
+                    // 在流结束时追加一个带 finishReason: "stop" 的结束标识
+                    .concatWith(Flux.defer(() -> {
+                        StreamResponse.StreamChoice finishChoice = StreamResponse.StreamChoice.builder()
+                                .index(0)
+                                .delta(StreamResponse.Delta.builder().build())
+                                .finishReason("stop")
+                                .build();
+                        return Flux.just(StreamResponse.builder()
+                                .id(traceId)
+                                .object("chat.completion.chunk")
+                                .created(created)
+                                .model(selectedModel.getModelKey())
+                                .choices(List.of(finishChoice))
+                                .build());
+                    }))
+                    .doOnComplete(() -> {
+                        // 流结束时记录日志
+                        long duration = System.currentTimeMillis() - startTime;
+                        int totalTokens = promptTokens[0] + completionTokens[0];
+                        requestLogService.logRequest(RequestLogDTO.builder()
+                                .traceId(traceId)
+                                .userId(userId)
+                                .apiKeyId(apiKeyId)
+                                .modelId(selectedModel.getId())
+                                .requestModel(selectedModel.getModelKey())
+                                .requestType("chat")
+                                .source(apiKeyId != null ? "api" : "web")
+                                .promptTokens(promptTokens[0])
+                                .completionTokens(completionTokens[0])
+                                .totalTokens(totalTokens)
+                                .duration((int) duration)
+                                .status("success")
+                                .routingStrategy(strategyType)
+                                .isFallback(false)
+                                .clientIp(clientIp)
+                                .userAgent(userAgent)
+                                .build());
+
+                // 扣减用户配额和余额（BYOK 模式下免费，不扣减）
+                if (userId != null && totalTokens > 0 && !isByok[0]) {
                     quotaService.deductTokens(userId, totalTokens);
-                    
+
                     // 计算费用并扣减余额
                     java.math.BigDecimal cost = billingService.calculateCost(
                             selectedModel,
                             promptTokens[0],
                             completionTokens[0]
                     );
-                    
+
                     if (cost.compareTo(java.math.BigDecimal.ZERO) > 0) {
                         // 根据来源区分描述
-                        String description = apiKeyId != null 
+                        String description = apiKeyId != null
                                 ? "API调用消费（流式） - " + selectedModel.getModelKey()
                                 : "网页调用消费（流式） - " + selectedModel.getModelKey();
                         balanceService.deductBalance(userId, cost, null, description);
                     }
+                } else if (isByok[0]) {
+                    log.info("BYOK 模式（流式）：用户 {} 使用自己的密钥，不扣减余额和配额", userId);
                 }
             }).doOnError(error -> {
-                // 流错误时记录日志
-                log.error("流式调用模型失败", error);
-                long duration = System.currentTimeMillis() - startTime;
-                requestLogService.logRequest(RequestLogDTO.builder()
-                        .traceId(traceId)
-                        .userId(userId)
-                        .apiKeyId(apiKeyId)
-                        .modelId(selectedModel.getId())
-                        .requestModel(selectedModel.getModelKey())
-                        .requestType("chat")
-                        .source(apiKeyId != null ? "api" : "web")
-                        .duration((int) duration)
-                        .status("failed")
-                        .errorMessage(error.getMessage())
-                        .errorCode("STREAM_ERROR")
-                        .routingStrategy(strategyType)
-                        .isFallback(false)
-                        .clientIp(clientIp)
-                        .userAgent(userAgent)
-                        .build());
-            });
+                        // 流错误时记录日志
+                        log.error("流式调用模型失败", error);
+                        long duration = System.currentTimeMillis() - startTime;
+                        requestLogService.logRequest(RequestLogDTO.builder()
+                                .traceId(traceId)
+                                .userId(userId)
+                                .apiKeyId(apiKeyId)
+                                .modelId(selectedModel.getId())
+                                .requestModel(selectedModel.getModelKey())
+                                .requestType("chat")
+                                .source(apiKeyId != null ? "api" : "web")
+                                .duration((int) duration)
+                                .status("failed")
+                                .errorMessage(error.getMessage())
+                                .errorCode("STREAM_ERROR")
+                                .routingStrategy(strategyType)
+                                .isFallback(false)
+                                .clientIp(clientIp)
+                                .userAgent(userAgent)
+                                .build());
+                    });
         } catch (Exception e) {
             log.error("流式调用模型失败", e);
             return Flux.error(new BusinessException(ErrorCode.SYSTEM_ERROR, "流式调用模型失败: " + e.getMessage()));

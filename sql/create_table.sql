@@ -212,6 +212,21 @@ create table if not exists plugin_config
     UNIQUE KEY uk_pluginKey (pluginKey)
 ) comment '插件配置' collate = utf8mb4_unicode_ci;
 
+-- 用户提供者密钥表（用户自己的 API Key）
+create table if not exists user_provider_key
+(
+    id           bigint auto_increment comment 'id' primary key,
+    userId       bigint                                 not null comment '用户 ID',
+    providerId   bigint                                 not null comment '提供者 ID',
+    providerName varchar(64)                            not null comment '提供者名称（冗余字段，便于查询）',
+    apiKey       varchar(512)                           not null comment 'API Key（加密存储）',
+    status       varchar(32)  default 'active'          not null comment '状态：active/inactive',
+    createTime   datetime     default CURRENT_TIMESTAMP not null comment '创建时间',
+    updateTime   datetime     default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP comment '更新时间',
+    isDelete     tinyint      default 0                 not null comment '是否删除',
+    KEY uk_user_provider (userId, providerId)
+) comment '用户提供者密钥（BYOK）' collate = utf8mb4_unicode_ci;
+
 -- 初始化用户数据
 -- 密码是 12345678（MD5 加密 + 盐值 yupi）
 INSERT INTO user (id, userAccount, userPassword, userName, userAvatar, userProfile, userRole, tokenQuota)
