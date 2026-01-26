@@ -13,9 +13,21 @@ declare namespace API {
     createTime?: string
   }
 
+  type BalanceVO = {
+    balance?: number
+    totalSpending?: number
+    totalRecharge?: number
+  }
+
   type BaseResponseApiKeyVO = {
     code?: number
     data?: ApiKeyVO
+    message?: string
+  }
+
+  type BaseResponseBalanceVO = {
+    code?: number
+    data?: BalanceVO
     message?: string
   }
 
@@ -25,9 +37,33 @@ declare namespace API {
     message?: string
   }
 
+  type BaseResponseCostStatsVO = {
+    code?: number
+    data?: CostStatsVO
+    message?: string
+  }
+
+  type BaseResponseCreateRechargeResponse = {
+    code?: number
+    data?: CreateRechargeResponse
+    message?: string
+  }
+
+  type BaseResponseListMapStringObject = {
+    code?: number
+    data?: Record<string, any>[]
+    message?: string
+  }
+
   type BaseResponseListModelVO = {
     code?: number
     data?: ModelVO[]
+    message?: string
+  }
+
+  type BaseResponseListPluginConfigVO = {
+    code?: number
+    data?: PluginConfigVO[]
     message?: string
   }
 
@@ -67,6 +103,18 @@ declare namespace API {
     message?: string
   }
 
+  type BaseResponsePageBillingRecord = {
+    code?: number
+    data?: PageBillingRecord
+    message?: string
+  }
+
+  type BaseResponsePageImageGenerationRecord = {
+    code?: number
+    data?: PageImageGenerationRecord
+    message?: string
+  }
+
   type BaseResponsePageModelVO = {
     code?: number
     data?: PageModelVO
@@ -79,15 +127,51 @@ declare namespace API {
     message?: string
   }
 
+  type BaseResponsePageRechargeRecord = {
+    code?: number
+    data?: PageRechargeRecord
+    message?: string
+  }
+
+  type BaseResponsePageRequestLog = {
+    code?: number
+    data?: PageRequestLog
+    message?: string
+  }
+
   type BaseResponsePageUserVO = {
     code?: number
     data?: PageUserVO
     message?: string
   }
 
+  type BaseResponsePluginConfigVO = {
+    code?: number
+    data?: PluginConfigVO
+    message?: string
+  }
+
+  type BaseResponsePluginExecuteVO = {
+    code?: number
+    data?: PluginExecuteVO
+    message?: string
+  }
+
   type BaseResponseProviderVO = {
     code?: number
     data?: ProviderVO
+    message?: string
+  }
+
+  type BaseResponseQuotaVO = {
+    code?: number
+    data?: QuotaVO
+    message?: string
+  }
+
+  type BaseResponseRequestLog = {
+    code?: number
+    data?: RequestLog
     message?: string
   }
 
@@ -115,15 +199,48 @@ declare namespace API {
     message?: string
   }
 
+  type BaseResponseUserAnalysisVO = {
+    code?: number
+    data?: UserAnalysisVO
+    message?: string
+  }
+
+  type BaseResponseUserSummaryStatsVO = {
+    code?: number
+    data?: UserSummaryStatsVO
+    message?: string
+  }
+
   type BaseResponseUserVO = {
     code?: number
     data?: UserVO
     message?: string
   }
 
+  type BillingRecord = {
+    id?: number
+    userId?: number
+    requestLogId?: number
+    amount?: number
+    balanceBefore?: number
+    balanceAfter?: number
+    description?: string
+    billingType?: string
+    createTime?: string
+  }
+
   type BlacklistRequest = {
     ip?: string
     reason?: string
+  }
+
+  type chatCompletionsWithFileParams = {
+    model?: string
+    messages: string
+    stream?: boolean
+    routing_strategy?: string
+    plugin_key?: string
+    enable_reasoning?: boolean
   }
 
   type ChatMessage = {
@@ -139,46 +256,91 @@ declare namespace API {
     max_tokens?: number
     enable_reasoning?: boolean
     routing_strategy?: string
-  }
-
-  type StreamResponse = {
-    id: string
-    object: string
-    created: number
-    model: string
-    choices: StreamChoice[]
-  }
-
-  type StreamChoice = {
-    index: number
-    delta: StreamDelta
-    finishReason: string | null
-  }
-
-  type StreamDelta = {
-    role?: string
-    content?: string
-    reasoningContent?: string
+    plugin_key?: string
+    file_url?: string
+    file_type?: string
   }
 
   type checkBlacklistParams = {
     ip: string
   }
 
+  type CostStatsVO = {
+    totalCost?: number
+    todayCost?: number
+  }
+
+  type CreateRechargeRequest = {
+    amount?: number
+  }
+
+  type CreateRechargeResponse = {
+    checkoutUrl?: string
+    sessionId?: string
+  }
+
   type DeleteRequest = {
     id?: number
+  }
+
+  type disablePluginParams = {
+    pluginKey: string
+  }
+
+  type disableUserParams = {
+    userId: number
+  }
+
+  type enablePluginParams = {
+    pluginKey: string
+  }
+
+  type enableUserParams = {
+    userId: number
+  }
+
+  type getHistoryDetailParams = {
+    id: number
   }
 
   type getModelVOByIdParams = {
     id: number
   }
 
+  type getMyBillingRecordsParams = {
+    pageNum?: number
+    pageSize?: number
+  }
+
+  type getMyDailyStatsParams = {
+    startDate?: string
+    endDate?: string
+  }
+
   type getMyLogsParams = {
     limit?: number
   }
 
+  type getMyRechargeRecordsParams = {
+    pageNum?: number
+    pageSize?: number
+  }
+
+  type getMyRecordsParams = {
+    pageNum?: number
+    pageSize?: number
+  }
+
+  type getPluginParams = {
+    pluginKey: string
+  }
+
   type getProviderVOByIdParams = {
     id: number
+  }
+
+  type getUserAnalysisParams = {
+    userId: number
   }
 
   type getUserByIdParams = {
@@ -187,6 +349,47 @@ declare namespace API {
 
   type getUserVOByIdParams = {
     id: number
+  }
+
+  type ImageData = {
+    url?: string
+    b64Json?: string
+    revisedPrompt?: string
+  }
+
+  type ImageGenerationRecord = {
+    id?: number
+    userId?: number
+    apiKeyId?: number
+    modelId?: number
+    modelKey?: string
+    prompt?: string
+    revisedPrompt?: string
+    imageUrl?: string
+    imageData?: string
+    size?: string
+    quality?: string
+    status?: string
+    cost?: number
+    duration?: number
+    errorMessage?: string
+    clientIp?: string
+    createTime?: string
+  }
+
+  type ImageGenerationRequest = {
+    prompt?: string
+    model?: string
+    size?: string
+    quality?: string
+    user?: string
+    n?: number
+    response_format?: string
+  }
+
+  type ImageGenerationResponse = {
+    created?: number
+    data?: ImageData[]
   }
 
   type listActiveModelsByProviderParams = {
@@ -289,6 +492,24 @@ declare namespace API {
     optimizeCountQuery?: boolean
   }
 
+  type PageBillingRecord = {
+    records?: BillingRecord[]
+    pageNumber?: number
+    pageSize?: number
+    totalPage?: number
+    totalRow?: number
+    optimizeCountQuery?: boolean
+  }
+
+  type PageImageGenerationRecord = {
+    records?: ImageGenerationRecord[]
+    pageNumber?: number
+    pageSize?: number
+    totalPage?: number
+    totalRow?: number
+    optimizeCountQuery?: boolean
+  }
+
   type PageModelVO = {
     records?: ModelVO[]
     pageNumber?: number
@@ -307,6 +528,24 @@ declare namespace API {
     optimizeCountQuery?: boolean
   }
 
+  type PageRechargeRecord = {
+    records?: RechargeRecord[]
+    pageNumber?: number
+    pageSize?: number
+    totalPage?: number
+    totalRow?: number
+    optimizeCountQuery?: boolean
+  }
+
+  type PageRequestLog = {
+    records?: RequestLog[]
+    pageNumber?: number
+    pageSize?: number
+    totalPage?: number
+    totalRow?: number
+    optimizeCountQuery?: boolean
+  }
+
   type PageUserVO = {
     records?: UserVO[]
     pageNumber?: number
@@ -314,6 +553,46 @@ declare namespace API {
     totalPage?: number
     totalRow?: number
     optimizeCountQuery?: boolean
+  }
+
+  type PluginConfigVO = {
+    id?: number
+    pluginKey?: string
+    pluginName?: string
+    pluginType?: string
+    description?: string
+    config?: string
+    status?: string
+    priority?: number
+    createTime?: string
+    updateTime?: string
+  }
+
+  type PluginExecuteRequest = {
+    pluginKey?: string
+    input?: string
+    fileUrl?: string
+    fileType?: string
+    params?: Record<string, any>
+    fileBytes?: string[]
+  }
+
+  type PluginExecuteVO = {
+    success?: boolean
+    pluginKey?: string
+    content?: string
+    errorMessage?: string
+    duration?: number
+    data?: Record<string, any>
+  }
+
+  type PluginUpdateRequest = {
+    id?: number
+    pluginName?: string
+    description?: string
+    config?: string
+    status?: string
+    priority?: number
   }
 
   type ProviderAddRequest = {
@@ -361,6 +640,33 @@ declare namespace API {
     updateTime?: string
   }
 
+  type QuotaUpdateRequest = {
+    userId?: number
+    tokenQuota?: number
+  }
+
+  type QuotaVO = {
+    tokenQuota?: number
+    usedTokens?: number
+    remainingQuota?: number
+  }
+
+  type RechargeRecord = {
+    id?: number
+    userId?: number
+    amount?: number
+    paymentMethod?: string
+    paymentId?: string
+    status?: string
+    description?: string
+    createTime?: string
+    updateTime?: string
+  }
+
+  type reloadPluginParams = {
+    pluginKey: string
+  }
+
   type RequestLog = {
     id?: number
     traceId?: string
@@ -387,6 +693,28 @@ declare namespace API {
     updateTime?: string
   }
 
+  type RequestLogQueryRequest = {
+    pageNum?: number
+    pageSize?: number
+    sortField?: string
+    sortOrder?: string
+    userId?: number
+    requestModel?: string
+    requestType?: string
+    source?: string
+    status?: string
+    startDate?: string
+    endDate?: string
+  }
+
+  type resetUserQuotaParams = {
+    userId: number
+  }
+
+  type stripeSuccessParams = {
+    session_id: string
+  }
+
   type TokenStatsVO = {
     totalTokens?: number
   }
@@ -399,6 +727,10 @@ declare namespace API {
     userAvatar?: string
     userProfile?: string
     userRole?: string
+    userStatus?: string
+    tokenQuota?: number
+    usedTokens?: number
+    balance?: number
     editTime?: string
     createTime?: string
     updateTime?: string
@@ -411,6 +743,22 @@ declare namespace API {
     userAvatar?: string
     userProfile?: string
     userRole?: string
+  }
+
+  type UserAnalysisVO = {
+    userId?: number
+    userAccount?: string
+    userName?: string
+    userStatus?: string
+    userRole?: string
+    tokenQuota?: number
+    usedTokens?: number
+    remainingQuota?: number
+    totalRequests?: number
+    successRequests?: number
+    totalTokens?: number
+    totalCost?: number
+    todayCost?: number
   }
 
   type UserLoginRequest = {
@@ -436,6 +784,17 @@ declare namespace API {
     checkPassword?: string
   }
 
+  type UserSummaryStatsVO = {
+    totalTokens?: number
+    tokenQuota?: number
+    usedTokens?: number
+    remainingQuota?: number
+    totalCost?: number
+    todayCost?: number
+    totalRequests?: number
+    successRequests?: number
+  }
+
   type UserUpdateRequest = {
     id?: number
     userName?: string
@@ -457,252 +816,5 @@ declare namespace API {
     usedTokens?: number
     balance?: number
     createTime?: string
-  }
-
-  // 阶段五新增类型定义
-
-  type QuotaVO = {
-    tokenQuota?: number
-    usedTokens?: number
-    remainingQuota?: number
-  }
-
-  type QuotaUpdateRequest = {
-    userId?: number
-    tokenQuota?: number
-  }
-
-  type CostStatsVO = {
-    totalCost?: number
-    todayCost?: number
-  }
-
-  type UserSummaryStatsVO = {
-    totalTokens?: number
-    tokenQuota?: number
-    usedTokens?: number
-    remainingQuota?: number
-    totalCost?: number
-    todayCost?: number
-    totalRequests?: number
-    successRequests?: number
-  }
-
-  type UserAnalysisVO = {
-    userId?: number
-    userAccount?: string
-    userName?: string
-    userStatus?: string
-    userRole?: string
-    tokenQuota?: number
-    usedTokens?: number
-    remainingQuota?: number
-    totalRequests?: number
-    successRequests?: number
-    totalTokens?: number
-    totalCost?: number
-    todayCost?: number
-  }
-
-  type RequestLogQueryRequest = {
-    pageNum?: number
-    pageSize?: number
-    sortField?: string
-    sortOrder?: string
-    userId?: number
-    requestModel?: string
-    requestType?: string
-    source?: string
-    status?: string
-    startDate?: string
-    endDate?: string
-  }
-
-  type PageRequestLog = {
-    records?: RequestLog[]
-    pageNumber?: number
-    pageSize?: number
-    totalPage?: number
-    totalRow?: number
-    optimizeCountQuery?: boolean
-  }
-
-  type BaseResponseQuotaVO = {
-    code?: number
-    data?: QuotaVO
-    message?: string
-  }
-
-  type BaseResponseCostStatsVO = {
-    code?: number
-    data?: CostStatsVO
-    message?: string
-  }
-
-  type BaseResponseUserSummaryStatsVO = {
-    code?: number
-    data?: UserSummaryStatsVO
-    message?: string
-  }
-
-  type BaseResponseUserAnalysisVO = {
-    code?: number
-    data?: UserAnalysisVO
-    message?: string
-  }
-
-  type BaseResponsePageRequestLog = {
-    code?: number
-    data?: PageRequestLog
-    message?: string
-  }
-
-  type BaseResponseRequestLog = {
-    code?: number
-    data?: RequestLog
-    message?: string
-  }
-
-  type BaseResponseListMapStringObject = {
-    code?: number
-    data?: Record<string, any>[]
-    message?: string
-  }
-
-  // 阶段六新增类型定义
-
-  type BalanceVO = {
-    balance?: number
-    totalSpending?: number
-    totalRecharge?: number
-  }
-
-  type BillingRecord = {
-    id?: number
-    userId?: number
-    requestLogId?: number
-    amount?: number
-    balanceBefore?: number
-    balanceAfter?: number
-    description?: string
-    billingType?: string
-    createTime?: string
-  }
-
-  type RechargeRecord = {
-    id?: number
-    userId?: number
-    amount?: number
-    paymentMethod?: string
-    paymentId?: string
-    status?: string
-    description?: string
-    createTime?: string
-    updateTime?: string
-  }
-
-  type CreateRechargeRequest = {
-    amount?: number
-  }
-
-  type CreateRechargeResponse = {
-    checkoutUrl?: string
-    sessionId?: string
-  }
-
-  type PageBillingRecord = {
-    records?: BillingRecord[]
-    pageNumber?: number
-    pageSize?: number
-    totalPage?: number
-    totalRow?: number
-  }
-
-  type PageRechargeRecord = {
-    records?: RechargeRecord[]
-    pageNumber?: number
-    pageSize?: number
-    totalPage?: number
-    totalRow?: number
-  }
-
-  type BaseResponseBalanceVO = {
-    code?: number
-    data?: BalanceVO
-    message?: string
-  }
-
-  type BaseResponsePageBillingRecord = {
-    code?: number
-    data?: PageBillingRecord
-    message?: string
-  }
-
-  type BaseResponsePageRechargeRecord = {
-    code?: number
-    data?: PageRechargeRecord
-    message?: string
-  }
-
-  type BaseResponseCreateRechargeResponse = {
-    code?: number
-    data?: CreateRechargeResponse
-    message?: string
-  }
-
-  // 阶段七新增类型定义（AI绘图）
-
-  type ImageGenerationRequest = {
-    prompt?: string
-    model?: string
-    n?: number
-    size?: string
-    quality?: string
-    response_format?: string
-  }
-
-  type ImageData = {
-    url?: string
-    b64Json?: string
-    revisedPrompt?: string
-  }
-
-  type ImageGenerationResponse = {
-    created?: number
-    data?: ImageData[]
-  }
-
-  type ImageGenerationRecord = {
-    id?: number
-    userId?: number
-    apiKeyId?: number
-    modelId?: number
-    modelKey?: string
-    prompt?: string
-    revisedPrompt?: string
-    imageUrl?: string
-    imageData?: string
-    size?: string
-    quality?: string
-    status?: string
-    cost?: number
-    duration?: number
-    errorMessage?: string
-    clientIp?: string
-    createTime?: string
-  }
-
-  type PageImageGenerationRecord = {
-    records?: ImageGenerationRecord[]
-    pageNumber?: number
-    pageSize?: number
-    totalPage?: number
-    totalRow?: number
-  }
-
-  type BaseResponsePageImageGenerationRecord = {
-    code?: number
-    data?: PageImageGenerationRecord
-    message?: string
   }
 }

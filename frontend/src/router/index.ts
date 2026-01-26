@@ -6,6 +6,7 @@ import UserManagePage from '@/pages/admin/UserManagePage.vue'
 import ModelManagePage from '@/pages/admin/ModelManagePage.vue'
 import ProviderManagePage from '@/pages/admin/ProviderManagePage.vue'
 import BlacklistManagePage from '@/pages/admin/BlacklistManagePage.vue'
+import PluginManagePage from '@/pages/admin/PluginManagePage.vue'
 import ChatPage from '@/pages/ChatPage.vue'
 import ApiKeyPage from '@/pages/user/ApiKeyPage.vue'
 import ProfilePage from '@/pages/user/ProfilePage.vue'
@@ -86,6 +87,11 @@ const router = createRouter({
       path: '/admin/blacklistManage',
       name: '黑名单管理',
       component: BlacklistManagePage,
+    },
+    {
+      path: '/admin/pluginManage',
+      name: '插件管理',
+      component: PluginManagePage,
     },
   ],
 })

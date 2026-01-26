@@ -14,6 +14,21 @@ export async function addUser(body: API.UserAddRequest, options?: { [key: string
   })
 }
 
+/** 获取用户使用分析数据 GET /user/analysis */
+export async function getUserAnalysis(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.getUserAnalysisParams,
+  options?: { [key: string]: any }
+) {
+  return request<API.BaseResponseUserAnalysisVO>('/user/analysis', {
+    method: 'GET',
+    params: {
+      ...params,
+    },
+    ...(options || {}),
+  })
+}
+
 /** 此处后端没有提供注释 POST /user/delete */
 export async function deleteUser(body: API.DeleteRequest, options?: { [key: string]: any }) {
   return request<API.BaseResponseBoolean>('/user/delete', {
@@ -22,6 +37,36 @@ export async function deleteUser(body: API.DeleteRequest, options?: { [key: stri
       'Content-Type': 'application/json',
     },
     data: body,
+    ...(options || {}),
+  })
+}
+
+/** 禁用用户 POST /user/disable */
+export async function disableUser(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.disableUserParams,
+  options?: { [key: string]: any }
+) {
+  return request<API.BaseResponseBoolean>('/user/disable', {
+    method: 'POST',
+    params: {
+      ...params,
+    },
+    ...(options || {}),
+  })
+}
+
+/** 启用用户 POST /user/enable */
+export async function enableUser(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.enableUserParams,
+  options?: { [key: string]: any }
+) {
+  return request<API.BaseResponseBoolean>('/user/enable', {
+    method: 'POST',
+    params: {
+      ...params,
+    },
     ...(options || {}),
   })
 }
@@ -99,6 +144,41 @@ export async function userLogout(options?: { [key: string]: any }) {
   })
 }
 
+/** 获取我的配额信息 GET /user/quota/my */
+export async function getMyQuota(options?: { [key: string]: any }) {
+  return request<API.BaseResponseQuotaVO>('/user/quota/my', {
+    method: 'GET',
+    ...(options || {}),
+  })
+}
+
+/** 重置用户已使用配额 POST /user/quota/reset */
+export async function resetUserQuota(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.resetUserQuotaParams,
+  options?: { [key: string]: any }
+) {
+  return request<API.BaseResponseBoolean>('/user/quota/reset', {
+    method: 'POST',
+    params: {
+      ...params,
+    },
+    ...(options || {}),
+  })
+}
+
+/** 设置用户配额 POST /user/quota/set */
+export async function setUserQuota(body: API.QuotaUpdateRequest, options?: { [key: string]: any }) {
+  return request<API.BaseResponseBoolean>('/user/quota/set', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: body,
+    ...(options || {}),
+  })
+}
+
 /** 此处后端没有提供注释 POST /user/register */
 export async function userRegister(
   body: API.UserRegisterRequest,
@@ -122,85 +202,6 @@ export async function updateUser(body: API.UserUpdateRequest, options?: { [key: 
       'Content-Type': 'application/json',
     },
     data: body,
-    ...(options || {}),
-  })
-}
-
-/** 获取我的配额信息 GET /user/quota/my */
-export async function getMyQuota(options?: { [key: string]: any }) {
-  return request<API.BaseResponseQuotaVO>('/user/quota/my', {
-    method: 'GET',
-    ...(options || {}),
-  })
-}
-
-/** 设置用户配额 POST /user/quota/set */
-export async function setUserQuota(
-  body: API.QuotaUpdateRequest,
-  options?: { [key: string]: any }
-) {
-  return request<API.BaseResponseBoolean>('/user/quota/set', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    data: body,
-    ...(options || {}),
-  })
-}
-
-/** 重置用户已使用配额 POST /user/quota/reset */
-export async function resetUserQuota(
-  params: { userId: number },
-  options?: { [key: string]: any }
-) {
-  return request<API.BaseResponseBoolean>('/user/quota/reset', {
-    method: 'POST',
-    params: {
-      ...params,
-    },
-    ...(options || {}),
-  })
-}
-
-/** 禁用用户 POST /user/disable */
-export async function disableUser(
-  params: { userId: number },
-  options?: { [key: string]: any }
-) {
-  return request<API.BaseResponseBoolean>('/user/disable', {
-    method: 'POST',
-    params: {
-      ...params,
-    },
-    ...(options || {}),
-  })
-}
-
-/** 启用用户 POST /user/enable */
-export async function enableUser(
-  params: { userId: number },
-  options?: { [key: string]: any }
-) {
-  return request<API.BaseResponseBoolean>('/user/enable', {
-    method: 'POST',
-    params: {
-      ...params,
-    },
-    ...(options || {}),
-  })
-}
-
-/** 获取用户使用分析数据 GET /user/analysis */
-export async function getUserAnalysis(
-  params: { userId: number },
-  options?: { [key: string]: any }
-) {
-  return request<API.BaseResponseUserAnalysisVO>('/user/analysis', {
-    method: 'GET',
-    params: {
-      ...params,
-    },
     ...(options || {}),
   })
 }

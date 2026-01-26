@@ -27,7 +27,24 @@
               <div class="answer-text" v-html="renderMarkdown(msg.answer || msg.content)"></div>
             </div>
             <!-- 用户消息 -->
-            <div v-else class="message-content" v-html="renderMarkdown(msg.content)"></div>
+            <div v-else class="message-content">
+              <!-- 图片缩略图 -->
+              <div v-if="msg.file && msg.file.type.startsWith('image/') && msg.filePreviewUrl" class="image-preview">
+                <img :src="msg.filePreviewUrl" :alt="msg.file.name" class="image-thumbnail" />
+                <div class="image-info">
+                  <PictureOutlined style="font-size: 14px; color: rgba(255,255,255,0.85)" />
+                  <span class="image-name">{{ msg.file.name }}</span>
+                  <span class="image-size">({{ formatFileSize(msg.file.size) }})</span>
+                </div>
+              </div>
+              <!-- PDF 文件信息 -->
+              <div v-else-if="msg.file" class="message-file">
+                <FilePdfOutlined style="font-size: 16px; color: #ff7a45" />
+                <span class="file-name">{{ msg.file.name }}</span>
+                <span class="file-size">({{ formatFileSize(msg.file.size) }})</span>
+              </div>
+              <div v-html="renderMarkdown(msg.content)"></div>
+            </div>
           </div>
         </div>
 
@@ -114,15 +131,70 @@
             <span class="reasoning-label">深度思考</span>
             <a-switch v-model:checked="enableReasoning" />
           </div>
+
+          <!-- 联网搜索开关 -->
+          <div class="plugin-switch">
+            <GlobalOutlined class="plugin-icon" />
+            <span class="plugin-label">联网搜索</span>
+            <a-switch v-model:checked="enableWebSearch" />
+          </div>
+
+          <!-- PDF 解析按钮 -->
+          <a-button
+            size="large"
+            :type="selectedPluginKey === 'pdf_parser' ? 'primary' : 'default'"
+            @click="togglePlugin('pdf_parser')"
+            class="plugin-button"
+          >
+            <FilePdfOutlined />
+            PDF 解析
+          </a-button>
+
+          <!-- 图片识别按钮 -->
+          <a-button
+            size="large"
+            :type="selectedPluginKey === 'image_recognition' ? 'primary' : 'default'"
+            @click="togglePlugin('image_recognition')"
+            class="plugin-button"
+          >
+            <PictureOutlined />
+            图片识别
+          </a-button>
+        </div>
+
+        <!-- 文件信息显示（在输入框上方） -->
+        <div v-if="uploadedFile" class="file-info-bar">
+          <!-- 图片预览 -->
+          <div v-if="uploadedFile.type.startsWith('image/') && uploadedFilePreviewUrl" class="file-preview-container">
+            <img :src="uploadedFilePreviewUrl" :alt="uploadedFile.name" class="file-preview-image" />
+            <div class="file-info">
+              <a-space>
+                <PictureOutlined style="font-size: 16px; color: #52c41a" />
+                <span class="file-name">{{ uploadedFile.name }}</span>
+                <span class="file-size">{{ formatFileSize(uploadedFile.size) }}</span>
+                <DeleteOutlined class="delete-icon" @click="clearFile" />
+              </a-space>
+            </div>
+          </div>
+          <!-- PDF 文件信息 -->
+          <div v-else>
+            <a-space>
+              <FilePdfOutlined style="font-size: 18px; color: #ff7a45" />
+              <span class="file-name">{{ uploadedFile.name }}</span>
+              <span class="file-size">{{ formatFileSize(uploadedFile.size) }}</span>
+              <DeleteOutlined class="delete-icon" @click="clearFile" />
+            </a-space>
+          </div>
         </div>
 
         <div class="input-wrapper">
           <a-textarea
             v-model:value="inputMessage"
-            :placeholder="canSendMessage ? '输入您的问题...' : '请先选择一个模型'"
+            :placeholder="getInputPlaceholder()"
             :auto-size="{ minRows: 2, maxRows: 6 }"
             :disabled="!canSendMessage || loading"
             @pressEnter="handleEnter"
+            @paste="handlePaste"
             class="chat-input"
           />
           <div class="input-actions">
@@ -222,9 +294,19 @@
 <script lang="ts" setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { listActiveModels } from '@/api/modelController'
+import { listEnabledPlugins } from '@/api/pluginController'
 import { message } from 'ant-design-vue'
 import { marked } from 'marked'
-import { AppstoreOutlined, DownOutlined, BulbOutlined, ThunderboltOutlined } from '@ant-design/icons-vue'
+import {
+  AppstoreOutlined,
+  DownOutlined,
+  BulbOutlined,
+  ThunderboltOutlined,
+  GlobalOutlined,
+  FilePdfOutlined,
+  PictureOutlined,
+  DeleteOutlined,
+} from '@ant-design/icons-vue'
 
 // 路由策略选项
 const routingStrategyOptions = [
@@ -247,6 +329,13 @@ interface Message {
   thinking?: string
   answer?: string
   thinkingExpanded?: boolean
+  file?: {
+    name: string
+    size: number
+    type: string
+  }
+  filePreviewUrl?: string
+  pluginKey?: string
 }
 
 const messages = ref<Message[]>([])
@@ -261,6 +350,15 @@ const enableReasoning = ref<boolean>(false)
 
 // 路由策略
 const routingStrategy = ref<'auto' | 'cost_first' | 'latency_first' | 'fixed'>('auto')
+
+// 插件相关
+const enabledPlugins = ref<API.PluginConfigVO[]>([])
+const enableWebSearch = ref(false)
+const selectedPluginKey = ref<string>('')
+
+// 文件上传
+const uploadedFile = ref<File | null>(null)
+const uploadedFilePreviewUrl = ref<string>('')
 
 // 计算不同类别的模型
 const fastModels = computed(() => {
@@ -298,6 +396,148 @@ const loadModels = async () => {
     message.error('加载模型列表失败')
   }
 }
+
+// 加载启用的插件列表
+const loadEnabledPlugins = async () => {
+  try {
+    const res = await listEnabledPlugins()
+    if (res.data.code === 0 && res.data.data) {
+      enabledPlugins.value = res.data.data
+    }
+  } catch (err) {
+    console.error('加载插件列表失败', err)
+  }
+}
+
+// 切换插件（PDF 解析 / 图片识别）
+const togglePlugin = (pluginKey: string) => {
+  if (selectedPluginKey.value === pluginKey) {
+    // 如果已选中，则取消
+    selectedPluginKey.value = ''
+    clearFile()
+  } else {
+    // 选中新插件（互斥，关闭联网搜索）
+    enableWebSearch.value = false
+    selectedPluginKey.value = pluginKey
+    // 如果已有文件，检查是否匹配
+    if (uploadedFile.value) {
+      const isValid = validateFileForPlugin(uploadedFile.value, pluginKey)
+      if (!isValid) {
+        clearFile()
+      }
+    }
+  }
+}
+
+// 监听联网搜索开关变化
+watch(enableWebSearch, (newValue) => {
+  if (newValue) {
+    // 启用联网搜索时，关闭其他插件
+    selectedPluginKey.value = ''
+    clearFile()
+  }
+})
+
+// 处理粘贴事件
+const handlePaste = (e: ClipboardEvent) => {
+  const items = e.clipboardData?.items
+  if (!items) return
+
+  // 只有选择了 PDF 解析或图片识别才能粘贴文件
+  if (!selectedPluginKey.value || selectedPluginKey.value === 'web_search') {
+    return
+  }
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]
+
+    // 检查是否是文件
+    if (item.kind === 'file') {
+      e.preventDefault()
+      const file = item.getAsFile()
+      if (file) {
+        handleFileSelect(file)
+      }
+      break
+    }
+  }
+}
+
+// 处理文件选择
+const handleFileSelect = (file: File) => {
+  // 验证文件
+  if (!validateFileForPlugin(file, selectedPluginKey.value)) {
+    return
+  }
+
+  // 检查文件大小（10MB）
+  const isLt10M = file.size / 1024 / 1024 < 10
+  if (!isLt10M) {
+    message.error('文件大小不能超过 10MB')
+    return
+  }
+
+  uploadedFile.value = file
+
+  // 如果是图片，生成预览 URL
+  if (file.type.startsWith('image/')) {
+    uploadedFilePreviewUrl.value = URL.createObjectURL(file)
+  }
+
+  message.success(`文件已添加: ${file.name}`)
+}
+
+// 验证文件是否匹配插件
+const validateFileForPlugin = (file: File, pluginKey: string): boolean => {
+  const isImage = file.type.startsWith('image/')
+  const isPdf = file.type === 'application/pdf'
+
+  if (pluginKey === 'pdf_parser') {
+    if (!isPdf) {
+      message.error('PDF 解析只能上传 PDF 文件')
+      return false
+    }
+  } else if (pluginKey === 'image_recognition') {
+    if (!isImage) {
+      message.error('图片识别只能上传图片文件')
+      return false
+    }
+  }
+
+  return true
+}
+
+// 清除文件
+const clearFile = () => {
+  // 释放预览 URL
+  if (uploadedFilePreviewUrl.value) {
+    URL.revokeObjectURL(uploadedFilePreviewUrl.value)
+    uploadedFilePreviewUrl.value = ''
+  }
+  uploadedFile.value = null
+}
+
+// 获取输入框提示文本
+const getInputPlaceholder = () => {
+  if (!canSendMessage.value) {
+    return '请先选择一个模型'
+  }
+  if (selectedPluginKey.value === 'pdf_parser') {
+    return '粘贴 PDF 文件，然后输入您的问题...'
+  }
+  if (selectedPluginKey.value === 'image_recognition') {
+    return '粘贴图片，然后输入您的问题...'
+  }
+  return '输入您的问题...'
+}
+
+// 格式化文件大小
+const formatFileSize = (bytes: number) => {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB'
+}
+
 
 // 显示模型选择弹窗
 const showModelSelector = () => {
@@ -344,10 +584,32 @@ const sendMessage = async () => {
   const userMessage = inputMessage.value.trim()
 
   // 添加用户消息到对话列表
-  messages.value.push({
+  const userMsg: Message = {
     role: 'user',
     content: userMessage,
-  })
+  }
+
+  // 如果有上传的文件，添加文件信息和预览
+  if (uploadedFile.value) {
+    userMsg.file = {
+      name: uploadedFile.value.name,
+      size: uploadedFile.value.size,
+      type: uploadedFile.value.type,
+    }
+    // 保存图片预览 URL
+    if (uploadedFilePreviewUrl.value) {
+      userMsg.filePreviewUrl = uploadedFilePreviewUrl.value
+    }
+  }
+
+  // 如果启用了插件，记录插件信息
+  if (enableWebSearch.value) {
+    userMsg.pluginKey = 'web_search'
+  } else if (selectedPluginKey.value) {
+    userMsg.pluginKey = selectedPluginKey.value
+  }
+
+  messages.value.push(userMsg)
 
   loading.value = true
   streamingContent.value = ''
@@ -357,27 +619,18 @@ const sendMessage = async () => {
   nextTick(() => scrollToBottom())
 
   try {
-    // 构建请求
-    const chatRequest: Record<string, unknown> = {
-      messages: messages.value.map(m => ({
-        role: m.role,
-        content: m.content,
-      })),
-      stream: true,
-      routing_strategy: routingStrategy.value,
+    // 如果有上传文件，使用文件上传接口
+    if (uploadedFile.value) {
+      await sendMessageWithFile()
+    } else {
+      await sendNormalMessage()
     }
 
-    // 固定模型策略时，传递选择的模型和深度思考配置
-    if (routingStrategy.value === 'fixed' && selectedModel.value) {
-      chatRequest.model = selectedModel.value.modelKey
-      chatRequest.enable_reasoning = selectedModel.value.supportReasoning === 1 ? enableReasoning.value : false
-    }
-
-    // 调用流式API
-    await streamChat(chatRequest)
-
-    // 成功后清空输入框
+    // 成功后清空输入框和文件
     inputMessage.value = ''
+    clearFile()
+    // 清空插件选择（但保留联网搜索开关状态）
+    selectedPluginKey.value = ''
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : '未知错误'
     message.error('对话失败: ' + errorMsg)
@@ -390,7 +643,93 @@ const sendMessage = async () => {
   }
 }
 
-// 流式调用
+// 发送普通消息（不带文件）
+const sendNormalMessage = async () => {
+  // 构建请求
+  const chatRequest: Record<string, unknown> = {
+    messages: messages.value.map(m => ({
+      role: m.role,
+      content: m.content,
+    })),
+    stream: true,
+    routing_strategy: routingStrategy.value,
+  }
+
+  // 固定模型策略时，传递选择的模型和深度思考配置
+  if (routingStrategy.value === 'fixed' && selectedModel.value) {
+    chatRequest.model = selectedModel.value.modelKey
+    chatRequest.enable_reasoning = selectedModel.value.supportReasoning === 1 ? enableReasoning.value : false
+  }
+
+  // 如果启用了联网搜索，添加插件信息
+  if (enableWebSearch.value) {
+    chatRequest.plugin_key = 'web_search'
+  }
+
+  // 调用流式API
+  await streamChat(chatRequest)
+}
+
+// 发送带文件的消息
+const sendMessageWithFile = async () => {
+  if (!uploadedFile.value) {
+    return
+  }
+
+  // 构建 FormData
+  const formData = new FormData()
+  formData.append('file', uploadedFile.value)
+
+  // 添加消息列表（JSON 字符串）
+  const messagesData = messages.value.map(m => ({
+    role: m.role,
+    content: m.content,
+  }))
+  formData.append('messages', JSON.stringify(messagesData))
+
+  // 添加流式参数
+  formData.append('stream', 'true')
+
+  // 添加路由策略
+  if (routingStrategy.value) {
+    formData.append('routing_strategy', routingStrategy.value)
+  }
+
+  // 固定模型策略时，传递选择的模型
+  if (routingStrategy.value === 'fixed' && selectedModel.value && selectedModel.value.modelKey) {
+    formData.append('model', selectedModel.value.modelKey)
+    if (selectedModel.value.supportReasoning === 1) {
+      formData.append('enable_reasoning', String(enableReasoning.value))
+    }
+  }
+
+  // 传递选择的插件
+  if (selectedPluginKey.value) {
+    formData.append('plugin_key', selectedPluginKey.value)
+  }
+
+  // 调用文件上传接口
+  await streamChatWithFile(formData)
+}
+
+// 流式调用（带文件上传）
+const streamChatWithFile = async (formData: FormData) => {
+  const url = `/api/internal/chat/completions/upload`
+
+  const response = await fetch(url, {
+    method: 'POST',
+    credentials: 'include', // 携带 session cookie
+    body: formData,
+  })
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`)
+  }
+
+  await processStream(response)
+}
+
+// 流式调用（普通消息）
 const streamChat = async (chatRequest: Record<string, unknown>) => {
   const url = `/api/internal/chat/completions`
 
@@ -415,6 +754,11 @@ const streamChat = async (chatRequest: Record<string, unknown>) => {
     }
   }
 
+  await processStream(response)
+}
+
+// 处理流式响应（通用方法）
+const processStream = async (response: Response) => {
   const reader = response.body?.getReader()
   const decoder = new TextDecoder()
 
@@ -445,7 +789,6 @@ const streamChat = async (chatRequest: Record<string, unknown>) => {
         if (line.startsWith('data:')) {
           // 移除 'data:' 前缀
           const data = line.substring(5).trim()
-          console.log("data:",data);
 
           if (!data) {
             continue
@@ -520,19 +863,19 @@ const streamChat = async (chatRequest: Record<string, unknown>) => {
   }
 
   // 完成后添加到消息列表
-  const message: Message = {
+  const msg: Message = {
     role: 'assistant',
     content: assistantContent,
   }
 
   // 如果有思考内容，添加到消息中
   if (thinkingContent) {
-    message.thinking = thinkingContent
-    message.answer = assistantContent
-    message.thinkingExpanded = false  // 默认收起
+    msg.thinking = thinkingContent
+    msg.answer = assistantContent
+    msg.thinkingExpanded = false  // 默认收起
   }
 
-  messages.value.push(message)
+  messages.value.push(msg)
   streamingContent.value = ''
   streamingThinking.value = ''
 }
@@ -573,6 +916,7 @@ watch([streamingContent, streamingThinking], () => {
 
 onMounted(() => {
   loadModels()
+  loadEnabledPlugins()
 })
 </script>
 
@@ -946,6 +1290,141 @@ onMounted(() => {
   background: #e6f4ff;
 }
 
+/* 插件开关 */
+.plugin-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #f5f5f5;
+  border-radius: 8px;
+}
+
+.plugin-icon {
+  font-size: 16px;
+  color: #1890ff;
+}
+
+.plugin-label {
+  font-size: 14px;
+  color: #262626;
+  margin-right: 4px;
+}
+
+/* 插件按钮 */
+.plugin-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+/* 文件信息栏 */
+.file-info-bar {
+  padding: 12px;
+  background: #e6f7ff;
+  border: 1px solid #91d5ff;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.file-preview-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.file-preview-image {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid #d9d9d9;
+}
+
+.file-info {
+  flex: 1;
+}
+
+.file-name {
+  font-weight: 500;
+  color: #262626;
+}
+
+.file-size {
+  font-size: 12px;
+  color: #8c8c8c;
+  margin-left: 8px;
+}
+
+.delete-icon {
+  font-size: 14px;
+  color: #ff4d4f;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.delete-icon:hover {
+  color: #cf1322;
+  transform: scale(1.2);
+}
+
+/* 消息中的文件信息 */
+.message-file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.message.user .message-file {
+  background: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.message.user .message-file .file-name {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.message.user .message-file .file-size {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* 图片预览 */
+.image-preview {
+  margin-bottom: 12px;
+}
+
+.image-thumbnail {
+  max-width: 200px;
+  max-height: 200px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  display: block;
+}
+
+.image-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.image-name {
+  font-weight: 500;
+}
+
+.image-size {
+  opacity: 0.7;
+}
 
 .input-wrapper {
   display: flex;

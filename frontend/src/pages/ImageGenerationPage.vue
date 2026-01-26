@@ -138,7 +138,7 @@
 
 <script lang="ts" setup>
 import { ref, computed, onMounted } from 'vue'
-import { generateImage, getMyImageRecords } from '@/api/imageController'
+import { generateImage, getMyRecords } from '@/api/imageController'
 import { message } from 'ant-design-vue'
 import { EyeOutlined, DownloadOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
@@ -212,7 +212,7 @@ const handleGenerate = async () => {
 const loadHistory = async () => {
   loading.value = true
   try {
-    const res = await getMyImageRecords({
+    const res = await getMyRecords({
       pageNum: pagination.value.current,
       pageSize: pagination.value.pageSize,
     })
