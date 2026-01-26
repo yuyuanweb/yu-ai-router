@@ -13,11 +13,14 @@ import com.yupi.airouter.model.dto.log.RequestLogDTO;
 import com.yupi.airouter.model.entity.Model;
 import com.yupi.airouter.model.entity.ModelProvider;
 import com.yupi.airouter.service.BalanceService;
+import com.yupi.airouter.model.dto.plugin.PluginExecuteRequest;
+import com.yupi.airouter.model.vo.PluginExecuteVO;
 import com.yupi.airouter.service.BillingService;
 import com.yupi.airouter.service.CacheService;
 import com.yupi.airouter.service.ChatService;
 import com.yupi.airouter.service.ModelInvokeService;
 import com.yupi.airouter.service.ModelProviderService;
+import com.yupi.airouter.service.PluginService;
 import com.yupi.airouter.service.QuotaService;
 import com.yupi.airouter.service.RequestLogService;
 import com.yupi.airouter.service.RoutingService;
@@ -27,6 +30,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -65,6 +69,9 @@ public class ChatServiceImpl implements ChatService {
     @Resource
     private BillingService billingService;
 
+    @Resource
+    private PluginService pluginService;
+
     /**
      * 最大 Fallback 重试次数
      */
@@ -93,6 +100,11 @@ public class ChatServiceImpl implements ChatService {
                 throw new BusinessException(ErrorCode.OPERATION_ERROR, 
                         "账户余额不足，当前余额：¥" + currentBalance + "，请先充值");
             }
+        }
+
+        // 如果指定了插件，先执行插件获取上下文，然后注入到消息中
+        if (StrUtil.isNotBlank(chatRequest.getPluginKey())) {
+            chatRequest = injectPluginContext(chatRequest, userId);
         }
 
         // 尝试从缓存获取响应
@@ -315,6 +327,11 @@ public class ChatServiceImpl implements ChatService {
             }
         }
 
+        // 如果指定了插件，先执行插件获取上下文，然后注入到消息中
+        if (StrUtil.isNotBlank(chatRequest.getPluginKey())) {
+            chatRequest = injectPluginContext(chatRequest, userId);
+        }
+
         // Token 计数器
         final int[] promptTokens = {0};
         final int[] completionTokens = {0};
@@ -524,5 +541,102 @@ public class ChatServiceImpl implements ChatService {
         }
         // 默认使用自动路由策略
         return "auto";
+    }
+
+    /**
+     * 执行插件并将结果注入到对话消息中
+     *
+     * @param chatRequest 原始请求
+     * @param userId      用户ID
+     * @return 注入插件上下文后的请求
+     */
+    private ChatRequest injectPluginContext(ChatRequest chatRequest, Long userId) {
+        String pluginKey = chatRequest.getPluginKey();
+        log.info("执行插件并注入上下文: {}", pluginKey);
+
+        // 获取用户的最后一条消息作为 input
+        String userInput = "";
+        List<ChatMessage> messages = chatRequest.getMessages();
+        if (messages != null && !messages.isEmpty()) {
+            for (int i = messages.size() - 1; i >= 0; i--) {
+                ChatMessage msg = messages.get(i);
+                if ("user".equals(msg.getRole())) {
+                    userInput = msg.getContent();
+                    break;
+                }
+            }
+        }
+
+        // 构建插件执行请求
+        PluginExecuteRequest pluginRequest = new PluginExecuteRequest();
+        pluginRequest.setPluginKey(pluginKey);
+        pluginRequest.setInput(userInput);
+        pluginRequest.setFileUrl(chatRequest.getFileUrl());
+        pluginRequest.setFileBytes(chatRequest.getFileBytes());
+        pluginRequest.setFileType(chatRequest.getFileType());
+
+        // 执行插件
+        PluginExecuteVO pluginResult = pluginService.executePlugin(pluginRequest, userId);
+
+        if (!pluginResult.isSuccess()) {
+            log.warn("插件执行失败: {}", pluginResult.getErrorMessage());
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "插件执行失败: " + pluginResult.getErrorMessage());
+        }
+
+        // 构建插件上下文的 system message
+        String pluginContext = buildPluginContextMessage(pluginKey, pluginResult.getContent());
+
+        // 创建新的消息列表，将插件上下文作为 system message 注入
+        List<ChatMessage> newMessages = new ArrayList<>();
+
+        // 添加插件上下文作为 system message
+        newMessages.add(new ChatMessage("system", pluginContext));
+
+        // 添加原始消息
+        if (messages != null) {
+            newMessages.addAll(messages);
+        }
+
+        // 更新请求的消息列表
+        chatRequest.setMessages(newMessages);
+
+        log.info("插件上下文注入完成，新增 system message");
+        return chatRequest;
+    }
+
+    /**
+     * 根据插件类型构建上下文消息
+     */
+    private String buildPluginContextMessage(String pluginKey, String content) {
+        return switch (pluginKey) {
+            case "web_search" -> String.format("""
+                    以下是实时网络搜索的结果，请根据这些信息回答用户的问题：
+                    
+                    %s
+                    
+                    请基于以上搜索结果，准确、简洁地回答用户的问题。如果搜索结果中没有相关信息，请如实告知。
+                    """, content);
+            case "pdf_parser" -> String.format("""
+                    以下是用户上传的 PDF 文档内容：
+                    
+                    %s
+                    
+                    请基于以上文档内容，回答用户的问题。如果问题与文档内容无关，请如实告知。
+                    """, content);
+            case "image_recognition" -> String.format("""
+                    以下是用户上传图片的识别结果：
+                    
+                    %s
+                    
+                    请基于以上图片识别结果，回答用户的问题。
+                    """, content);
+            default -> String.format("""
+                    以下是插件返回的额外信息：
+                    
+                    %s
+                    
+                    请基于以上信息回答用户的问题。
+                    """, content);
+        };
     }
 }

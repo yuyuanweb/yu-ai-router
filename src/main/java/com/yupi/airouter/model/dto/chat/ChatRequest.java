@@ -1,5 +1,6 @@
 package com.yupi.airouter.model.dto.chat;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
@@ -60,4 +61,34 @@ public class ChatRequest implements Serializable {
      */
     @JsonProperty("routing_strategy")
     private String routingStrategy;
+
+    // ========== 插件相关参数 ==========
+
+    /**
+     * 插件标识
+     * web_search: Web搜索插件
+     * pdf_parser: PDF解析插件
+     * image_recognition: 图片识别插件
+     */
+    @JsonProperty("plugin_key")
+    private String pluginKey;
+
+    /**
+     * 文件 URL（用于 PDF 解析、图片识别）
+     */
+    @JsonProperty("file_url")
+    private String fileUrl;
+
+    /**
+     * 文件字节数组（直接传递文件内容）
+     * 注意：此字段不通过 JSON 传递，仅用于内部文件上传接口
+     */
+    @JsonIgnore
+    private transient byte[] fileBytes;
+
+    /**
+     * 文件类型（如 image/png、application/pdf）
+     */
+    @JsonProperty("file_type")
+    private String fileType;
 }

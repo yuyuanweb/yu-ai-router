@@ -11,14 +11,16 @@ import com.yupi.airouter.service.BalanceService;
 import com.yupi.airouter.service.BillingRecordService;
 import com.yupi.airouter.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
@@ -30,7 +32,6 @@ import java.math.BigDecimal;
  */
 @RestController
 @RequestMapping("/balance")
-@Tag(name = "余额管理")
 @Slf4j
 public class BalanceController {
 

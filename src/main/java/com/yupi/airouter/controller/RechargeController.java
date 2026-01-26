@@ -15,7 +15,6 @@ import com.yupi.airouter.service.RechargeService;
 import com.yupi.airouter.service.StripePaymentService;
 import com.yupi.airouter.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AllArgsConstructor;
@@ -34,7 +33,6 @@ import java.math.BigDecimal;
  */
 @RestController
 @RequestMapping("/recharge")
-@Tag(name = "充值管理")
 @Slf4j
 public class RechargeController {
 
@@ -59,13 +57,13 @@ public class RechargeController {
     public BaseResponse<CreateRechargeResponse> createStripeRecharge(
             @RequestBody CreateRechargeRequest request,
             HttpServletRequest httpRequest) {
-        
+
         if (request.getAmount() == null || request.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "充值金额必须大于0");
         }
 
         // 设置最小充值金额1元，最大10000元
-        if (request.getAmount().compareTo(BigDecimal.ONE) < 0 || 
+        if (request.getAmount().compareTo(BigDecimal.ONE) < 0 ||
             request.getAmount().compareTo(new BigDecimal("10000")) > 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "充值金额必须在1-10000元之间");
         }
@@ -98,7 +96,7 @@ public class RechargeController {
     @Operation(summary = "Stripe充值成功回调")
     public BaseResponse<String> stripeSuccess(@RequestParam("session_id") String sessionId) {
         log.info("收到Stripe支付成功回调，SessionID: {}", sessionId);
-        
+
         boolean success = stripePaymentService.handlePaymentSuccess(sessionId);
         if (success) {
             return ResultUtils.success("充值成功！");

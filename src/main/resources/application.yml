@@ -29,6 +29,10 @@ spring:
         options:
           model: qwen-plus
           temperature: 0.7
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
 server:
   port: 8123
   servlet:
@@ -49,6 +53,10 @@ stripe:
   webhook-secret: whsec_6c936e95bc9112c5453f083d083dbdd01c464eaebccde119ee5637142d18beb4
   success-url: http://localhost:5173/recharge/success  # 支付成功回调（前端页面）
   cancel-url: http://localhost:5173/recharge/cancel   # 支付取消回调（前端页面）
+# 插件配置
+plugin:
+  serpapi:
+    api-key: YOUR_SERPAPI_KEY  # 请在 application-local.yml 中配置实际的 API Key
 # springdoc-openapi 配置
 springdoc:
   group-configs:

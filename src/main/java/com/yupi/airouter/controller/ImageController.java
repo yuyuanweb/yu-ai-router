@@ -17,7 +17,6 @@ import com.yupi.airouter.service.ApiKeyService;
 import com.yupi.airouter.service.ImageGenerationService;
 import com.yupi.airouter.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
@@ -30,7 +29,6 @@ import org.springframework.web.bind.annotation.*;
  */
 @RestController
 @RequestMapping("/v1/images")
-@Tag(name = "图片生成")
 @Slf4j
 public class ImageController {
 
@@ -60,14 +58,14 @@ public class ImageController {
         if (StrUtil.isNotBlank(authorization) && authorization.startsWith("Bearer ")) {
             String apiKeyValue = authorization.substring(7);
             ApiKey apiKey = apiKeyService.getByKeyValue(apiKeyValue);
-            
+
             if (apiKey == null) {
                 throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "API Key 无效或已失效");
             }
             if (!"active".equals(apiKey.getStatus())) {
                 throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "API Key 已被禁用");
             }
-            
+
             userId = apiKey.getUserId();
             apiKeyId = apiKey.getId();
         } else {
