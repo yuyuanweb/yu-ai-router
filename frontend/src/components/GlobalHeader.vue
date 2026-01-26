@@ -64,6 +64,7 @@ import {
   HistoryOutlined,
   PictureOutlined,
   ApiOutlined,
+  SafetyOutlined,
 } from '@ant-design/icons-vue'
 
 const loginUserStore = useLoginUserStore()
@@ -106,6 +107,12 @@ const originItems = [
     icon: () => h(HistoryOutlined),
     label: '调用历史',
     title: '调用历史',
+  },
+  {
+    key: '/user/mykeys',
+    icon: () => h(SafetyOutlined),
+    label: '我的密钥',
+    title: '我的密钥（BYOK）',
   },
   {
     key: '/admin/userManage',

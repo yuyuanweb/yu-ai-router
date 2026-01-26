@@ -12,6 +12,7 @@ import * as modelProviderController from './modelProviderController'
 import * as pluginController from './pluginController'
 import * as modelController from './modelController'
 import * as internalChatController from './internalChatController'
+import * as userProviderKeyController from './userProviderKeyController'
 import * as apiKeyController from './apiKeyController'
 import * as blacklistController from './blacklistController'
 import * as healthController from './healthController'
@@ -27,6 +28,7 @@ export default {
   pluginController,
   modelController,
   internalChatController,
+  userProviderKeyController,
   apiKeyController,
   blacklistController,
   healthController,

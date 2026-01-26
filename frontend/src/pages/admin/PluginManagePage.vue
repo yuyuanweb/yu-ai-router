@@ -186,8 +186,14 @@ const configModalVisible = ref(false)
 const currentPlugin = ref<API.PluginConfigVO | null>(null)
 
 // 编辑表单
-const editForm = ref({
-  id: '',
+const editForm = ref<{
+  id?: number
+  pluginName?: string
+  description?: string
+  config?: string
+  priority?: number
+}>({
+  id: undefined,
   pluginName: '',
   description: '',
   config: '',
@@ -212,26 +218,28 @@ const loadPlugins = async () => {
 
 // 启用插件
 const handleEnable = async (record: API.PluginConfigVO) => {
+  if (!record.pluginKey) return
   try {
     const res = await enablePlugin({ pluginKey: record.pluginKey })
     if (res.data.code === 0) {
       message.success('插件已启用')
       loadPlugins()
     }
-  } catch (err) {
+  } catch {
     message.error('启用失败')
   }
 }
 
 // 禁用插件
 const handleDisable = async (record: API.PluginConfigVO) => {
+  if (!record.pluginKey) return
   try {
     const res = await disablePlugin({ pluginKey: record.pluginKey })
     if (res.data.code === 0) {
       message.success('插件已禁用')
       loadPlugins()
     }
-  } catch (err) {
+  } catch {
     message.error('禁用失败')
   }
 }
@@ -240,7 +248,7 @@ const handleDisable = async (record: API.PluginConfigVO) => {
 const handleEdit = (record: API.PluginConfigVO) => {
   currentPlugin.value = record
   editForm.value = {
-    id: record.id || '',
+    id: typeof record.id === 'number' ? record.id : parseInt(String(record.id)),
     pluginName: record.pluginName || '',
     description: record.description || '',
     config: record.config || '',
@@ -258,19 +266,20 @@ const handleUpdate = async () => {
       editModalVisible.value = false
       loadPlugins()
     }
-  } catch (err) {
+  } catch {
     message.error('更新失败')
   }
 }
 
 // 重载插件
 const handleReload = async (record: API.PluginConfigVO) => {
+  if (!record.pluginKey) return
   try {
     const res = await reloadPlugin({ pluginKey: record.pluginKey })
     if (res.data.code === 0) {
       message.success('重载成功')
     }
-  } catch (err) {
+  } catch {
     message.error('重载失败')
   }
 }
@@ -282,7 +291,7 @@ const handleReloadAllPlugins = async () => {
     if (res.data.code === 0) {
       message.success('所有插件重载成功')
     }
-  } catch (err) {
+  } catch {
     message.error('重载失败')
   }
 }

@@ -50,7 +50,6 @@ export async function chatCompletionsWithFile(
       ...params,
     },
     data: formData,
-    requestType: 'form',
     ...(options || {}),
   })
 }

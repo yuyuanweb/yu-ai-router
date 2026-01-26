@@ -11,6 +11,7 @@ import ChatPage from '@/pages/ChatPage.vue'
 import ApiKeyPage from '@/pages/user/ApiKeyPage.vue'
 import ProfilePage from '@/pages/user/ProfilePage.vue'
 import CallHistoryPage from '@/pages/user/CallHistoryPage.vue'
+import MyKeysPage from '@/pages/user/MyKeysPage.vue'
 import RechargeSuccessPage from '@/pages/user/RechargeSuccessPage.vue'
 import RechargeCancelPage from '@/pages/user/RechargeCancelPage.vue'
 import ImageGenerationPage from '@/pages/ImageGenerationPage.vue'
@@ -47,6 +48,11 @@ const router = createRouter({
       path: '/user/history',
       name: '调用历史',
       component: CallHistoryPage,
+    },
+    {
+      path: '/user/mykeys',
+      name: '我的密钥',
+      component: MyKeysPage,
     },
     {
       path: '/recharge/success',

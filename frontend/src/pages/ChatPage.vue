@@ -9,12 +9,16 @@
           <p>选择一个模型，然后输入您的问题</p>
         </div>
 
-        <div v-for="(msg, index) in messages" :key="index" class="message-wrapper">
+        <div v-for="(msg, index) in messages" :key="index" class="message-wrapper" :class="msg.role">
+          <!-- 角色标签 -->
+          <div v-if="msg.role === 'assistant'" class="role-label assistant-label">
+            <span>{{ getAIDisplayName() }}</span>
+          </div>
+          <div v-else class="role-label user-label">
+            <span>你</span>
+          </div>
+
           <div class="message" :class="msg.role">
-            <div class="message-header">
-              <strong v-if="msg.role === 'user'">你</strong>
-              <strong v-else>{{ getAIDisplayName() }}</strong>
-            </div>
             <!-- AI 回答（可能包含思考内容） -->
             <div v-if="msg.role === 'assistant'" class="message-content">
               <div v-if="msg.thinking" class="thinking-section">
@@ -49,11 +53,11 @@
         </div>
 
         <!-- 流式响应中的消息 -->
-        <div v-if="streamingContent || streamingThinking" class="message-wrapper">
+        <div v-if="streamingContent || streamingThinking" class="message-wrapper assistant">
+          <div class="role-label assistant-label">
+            <span>{{ getAIDisplayName() }}</span>
+          </div>
           <div class="message assistant">
-            <div class="message-header">
-              <strong>{{ getAIDisplayName() }}</strong>
-            </div>
             <div class="message-content">
               <!-- 思考内容（如果有） -->
               <div v-if="streamingThinking" class="thinking-section">
@@ -69,13 +73,13 @@
         </div>
 
         <!-- 加载中提示 -->
-        <div v-if="loading && !streamingContent" class="message-wrapper">
+        <div v-if="loading && !streamingContent" class="message-wrapper assistant">
+          <div class="role-label assistant-label">
+            <span>{{ getAIDisplayName() }}</span>
+          </div>
           <div class="message assistant">
-            <div class="message-header">
-              <strong>{{ getAIDisplayName() }}</strong>
-            </div>
-            <div class="message-content">
-              <a-spin /> 思考中...
+            <div class="message-content loading-message">
+              <a-spin /> <span>思考中...</span>
             </div>
           </div>
         </div>
@@ -925,71 +929,109 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   height: calc(100vh - 64px);
-  background: #f5f5f5;
+  background: linear-gradient(180deg, #f0f2f5 0%, #fafafa 100%);
   overflow: hidden;
 }
 
 .model-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
-  padding: 8px 0;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  padding: 12px 0;
 }
 
 .model-card {
-  padding: 16px;
-  border: 2px solid #e8e8e8;
-  border-radius: 8px;
+  padding: 18px;
+  border: 2px solid #f0f0f0;
+  border-radius: 12px;
   cursor: pointer;
   transition: all 0.3s;
   background: white;
+  position: relative;
 }
 
 .model-card:hover {
   border-color: #1890ff;
-  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.2);
+  box-shadow: 0 4px 16px rgba(24, 144, 255, 0.15);
+  transform: translateY(-2px);
 }
 
 .model-card.active {
   border-color: #1890ff;
-  background: #e6f7ff;
+  background: linear-gradient(135deg, #e6f7ff 0%, #f0f9ff 100%);
+  box-shadow: 0 4px 16px rgba(24, 144, 255, 0.2);
+}
+
+.model-card.active::after {
+  content: '✓';
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 22px;
+  height: 22px;
+  background: #1890ff;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.3);
 }
 
 .model-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+  gap: 8px;
+}
+
+.model-card.active .model-header {
+  padding-left: 28px;
 }
 
 .model-name {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 17px;
+  font-weight: 700;
   color: #262626;
+  letter-spacing: -0.3px;
+  flex: 1;
+}
+
+.model-card.active .model-name {
+  color: #1890ff;
 }
 
 .model-info {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   font-size: 12px;
   color: #8c8c8c;
 }
 
 .model-provider {
   color: #1890ff;
+  font-weight: 500;
+  background: #f0f5ff;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 11px;
 }
 
 .model-price {
   color: #52c41a;
-  font-weight: 500;
+  font-weight: 600;
+  font-size: 12px;
 }
 
 .model-desc {
-  font-size: 12px;
+  font-size: 13px;
   color: #595959;
-  line-height: 1.4;
+  line-height: 1.5;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -1001,13 +1043,13 @@ onMounted(() => {
 /* 对话内容包裹层 */
 .chat-wrapper {
   flex: 1;
-  max-width: 900px;
+  max-width: 1000px;
   margin: 0 auto;
   width: 100%;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 20px;
+  padding: 24px;
 }
 
 /* 消息列表区域 */
@@ -1022,110 +1064,225 @@ onMounted(() => {
 
 .empty-state {
   text-align: center;
-  padding: 60px 20px;
+  padding: 80px 20px;
   color: #8c8c8c;
 }
 
 .empty-state h2 {
-  font-size: 24px;
-  margin-bottom: 8px;
+  font-size: 28px;
+  margin-bottom: 12px;
   color: #262626;
+  font-weight: 600;
+  background: linear-gradient(135deg, #1890ff 0%, #722ed1 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.empty-state p {
+  font-size: 15px;
+  color: #8c8c8c;
 }
 
 .message-wrapper {
-  margin-bottom: 16px;
+  margin-bottom: 24px;
+  animation: messageSlideIn 0.3s ease-out;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.message-wrapper.user {
+  align-items: flex-end;
+}
+
+.message-wrapper.assistant {
+  align-items: flex-start;
+}
+
+/* 角色标签 */
+.role-label {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 0;
+  margin-bottom: 2px;
+}
+
+.assistant-label {
+  color: #8c8c8c;
+  padding-left: 4px;
+}
+
+.user-label {
+  color: #1890ff;
+  padding-right: 4px;
+}
+
+@keyframes messageSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .message {
-  padding: 16px 20px;
-  border-radius: 12px;
+  padding: 14px 18px;
+  border-radius: 16px;
   max-width: 100%;
+  transition: all 0.3s;
+  line-height: 1.7;
+  position: relative;
 }
 
 .message.user {
-  background: #1890ff;
+  background: linear-gradient(135deg, #1890ff 0%, #40a9ff 100%);
   color: white;
-  margin-left: auto;
-  margin-right: 0;
-  max-width: 80%;
+  width: fit-content;
+  max-width: 65%;
+  box-shadow: 0 3px 14px rgba(24, 144, 255, 0.28);
+  word-break: break-word;
+  border-bottom-right-radius: 4px;
+}
+
+.message.user:hover {
+  box-shadow: 0 5px 20px rgba(24, 144, 255, 0.38);
+  transform: translateY(-1px);
 }
 
 .message.assistant {
   background: white;
-  border: 1px solid #e8e8e8;
-  max-width: 100%;
+  border: 1px solid #f0f0f0;
+  max-width: 90%;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  border-bottom-left-radius: 4px;
 }
 
-.message-header {
-  margin-bottom: 8px;
-  font-size: 14px;
-}
-
-.message.user .message-header {
-  color: rgba(255, 255, 255, 0.85);
-}
-
-.message.assistant .message-header {
-  color: #8c8c8c;
+.message.assistant:hover {
+  box-shadow: 0 3px 16px rgba(0, 0, 0, 0.08);
+  border-color: #e8e8e8;
 }
 
 .message-content {
-  line-height: 1.6;
+  line-height: 1.7;
   word-wrap: break-word;
+  font-size: 14px;
+}
+
+.message.user .message-content {
+  color: rgba(255, 255, 255, 0.98);
+  font-weight: 400;
+}
+
+.loading-message {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #8c8c8c;
+  font-size: 14px;
 }
 
 .message-content :deep(pre) {
-  background: #f6f6f6;
-  padding: 12px;
-  border-radius: 6px;
+  background: #282c34;
+  padding: 16px;
+  border-radius: 10px;
   overflow-x: auto;
-  margin: 8px 0;
+  margin: 12px 0;
+  border: 1px solid #e0e0e0;
 }
 
 .message-content :deep(code) {
-  background: #f6f6f6;
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-family: 'Monaco', 'Consolas', monospace;
+  background: #f0f2f5;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
+  font-size: 13px;
+  color: #d63384;
+  border: 1px solid #e8e8e8;
 }
 
 .message-content :deep(pre code) {
   background: transparent;
   padding: 0;
+  border: none;
+  color: #abb2bf;
+  font-size: 13px;
+}
+
+.message-content :deep(blockquote) {
+  border-left: 4px solid #1890ff;
+  padding-left: 16px;
+  margin: 12px 0;
+  color: #595959;
+  background: #f0f5ff;
+  padding: 12px 16px;
+  border-radius: 8px;
+}
+
+.message-content :deep(ul),
+.message-content :deep(ol) {
+  padding-left: 24px;
+  margin: 8px 0;
+}
+
+.message-content :deep(li) {
+  margin: 6px 0;
+}
+
+.message-content :deep(a) {
+  color: #1890ff;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: all 0.3s;
+}
+
+.message-content :deep(a:hover) {
+  border-bottom-color: #1890ff;
 }
 
 /* 思考内容样式 */
 .thinking-section {
-  margin-bottom: 16px;
-  border-radius: 6px;
-  background: #f8f8f8;
+  margin-bottom: 18px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #faf5ff 0%, #f0f0f0 100%);
   overflow: hidden;
-  border: 1px solid #e0e0e0;
+  border: 1px solid #d3adf7;
 }
 
 .thinking-toggle {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
+  padding: 10px 16px;
   cursor: pointer;
   user-select: none;
-  transition: background 0.2s;
+  transition: all 0.3s;
 }
 
 .thinking-toggle:hover {
-  background: #ececec;
+  background: rgba(114, 46, 209, 0.05);
 }
 
 .thinking-title {
   font-size: 13px;
-  color: #888;
-  font-weight: 400;
+  color: #722ed1;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.thinking-title::before {
+  content: '💭';
+  font-size: 14px;
 }
 
 .thinking-arrow {
   font-size: 11px;
-  color: #888;
+  color: #722ed1;
   transition: transform 0.3s;
 }
 
@@ -1134,12 +1291,12 @@ onMounted(() => {
 }
 
 .thinking-detail {
-  padding: 12px 14px;
-  background: #fafafa;
-  border-top: 1px solid #e0e0e0;
-  color: #666;
-  font-size: 15px;
-  line-height: 1.6;
+  padding: 16px 18px;
+  background: rgba(250, 245, 255, 0.5);
+  border-top: 1px solid #efdbff;
+  color: #595959;
+  font-size: 14px;
+  line-height: 1.7;
 }
 
 .thinking-detail :deep(p) {
@@ -1178,18 +1335,19 @@ onMounted(() => {
 .input-container {
   flex-shrink: 0;
   background: white;
-  border-radius: 12px;
-  padding: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+  border: 1px solid #f0f0f0;
 }
 
 .options-bar {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #f0f0f0;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e8e8e8;
   flex-wrap: wrap;
 }
 
@@ -1197,45 +1355,58 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  border: 1px solid #d9d9d9;
-  border-radius: 8px;
-  padding: 8px 16px;
+  border: 1px solid #e8e8e8;
+  border-radius: 10px;
+  padding: 8px 14px;
   height: auto;
-  font-size: 14px;
+  font-size: 13px;
   transition: all 0.3s;
+  background: #fafafa;
 }
 
 .model-select-button:hover {
   border-color: #1890ff;
   color: #1890ff;
+  background: #f0f5ff;
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.1);
+  transform: translateY(-1px);
 }
 
 .current-model {
-  font-weight: 500;
+  font-weight: 600;
+  color: #262626;
 }
 
 .dropdown-icon {
-  font-size: 12px;
-  opacity: 0.6;
+  font-size: 11px;
+  opacity: 0.5;
 }
 
 .reasoning-switch {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 16px;
-  background: #f5f5f5;
-  border-radius: 8px;
+  padding: 8px 14px;
+  background: linear-gradient(135deg, #f9f0ff 0%, #efdbff 100%);
+  border: 1px solid #d3adf7;
+  border-radius: 10px;
+  transition: all 0.3s;
+}
+
+.reasoning-switch:hover {
+  background: linear-gradient(135deg, #f9f0ff 0%, #d3adf7 100%);
+  box-shadow: 0 2px 8px rgba(114, 46, 209, 0.15);
 }
 
 .reasoning-icon {
-  font-size: 16px;
+  font-size: 15px;
   color: #722ed1;
 }
 
 .reasoning-label {
-  font-size: 14px;
-  color: #262626;
+  font-size: 13px;
+  color: #722ed1;
+  font-weight: 500;
   margin-right: 4px;
 }
 
@@ -1244,50 +1415,64 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  border: 1px solid #d9d9d9;
-  border-radius: 8px;
-  padding: 8px 16px;
+  border: 1px solid #b5f5ec;
+  border-radius: 10px;
+  padding: 8px 14px;
   height: auto;
-  font-size: 14px;
-  background: linear-gradient(135deg, #f0f5ff 0%, #e6f4ff 100%);
+  font-size: 13px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e6f7ff 100%);
   transition: all 0.3s;
 }
 
 .strategy-select-button:hover {
   border-color: #1890ff;
-  background: linear-gradient(135deg, #e6f4ff 0%, #d6e4ff 100%);
+  background: linear-gradient(135deg, #e6f7ff 0%, #bae7ff 100%);
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.15);
+  transform: translateY(-1px);
 }
 
 .strategy-label {
-  font-weight: 500;
+  font-weight: 600;
   color: #1890ff;
 }
 
 .strategy-option {
-  padding: 4px 0;
-  min-width: 200px;
+  padding: 8px 12px;
+  min-width: 260px;
+  border-radius: 8px;
+  transition: all 0.3s;
+}
+
+.strategy-option:hover {
+  background: #f5f5f5;
 }
 
 .strategy-option-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .strategy-option-label {
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   color: #262626;
 }
 
 .strategy-option-desc {
   font-size: 12px;
   color: #8c8c8c;
+  line-height: 1.5;
 }
 
 .strategy-active {
-  background: #e6f4ff;
+  background: linear-gradient(135deg, #e6f7ff 0%, #bae7ff 100%);
+  border: 1px solid #91d5ff;
+}
+
+.strategy-active .strategy-option-label {
+  color: #1890ff;
 }
 
 /* 插件开关 */
@@ -1295,19 +1480,27 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 16px;
-  background: #f5f5f5;
-  border-radius: 8px;
+  padding: 8px 14px;
+  background: linear-gradient(135deg, #f0f5ff 0%, #e8f4ff 100%);
+  border: 1px solid #d6e4ff;
+  border-radius: 10px;
+  transition: all 0.3s;
+}
+
+.plugin-switch:hover {
+  background: linear-gradient(135deg, #e6f4ff 0%, #d6e4ff 100%);
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.15);
 }
 
 .plugin-icon {
-  font-size: 16px;
+  font-size: 15px;
   color: #1890ff;
 }
 
 .plugin-label {
-  font-size: 14px;
-  color: #262626;
+  font-size: 13px;
+  color: #1890ff;
+  font-weight: 500;
   margin-right: 4px;
 }
 
@@ -1316,31 +1509,65 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  border: 1px solid #e8e8e8;
+  transition: all 0.3s;
+  padding: 8px 14px;
+  background: white;
+  color: #595959;
+}
+
+.plugin-button:hover {
+  border-color: #1890ff;
+  color: #1890ff;
+  background: #f0f5ff;
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.1);
+  transform: translateY(-1px);
+}
+
+/* Primary 状态的插件按钮 */
+.plugin-button.ant-btn-primary {
+  background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%) !important;
+  border-color: #1890ff !important;
+  color: white !important;
+  font-weight: 500;
+}
+
+.plugin-button.ant-btn-primary:hover {
+  background: linear-gradient(135deg, #40a9ff 0%, #1890ff 100%) !important;
+  border-color: #40a9ff !important;
+  color: white !important;
+  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.3);
 }
 
 /* 文件信息栏 */
 .file-info-bar {
-  padding: 12px;
-  background: #e6f7ff;
-  border: 1px solid #91d5ff;
-  border-radius: 8px;
-  margin-bottom: 12px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, #e6fffb 0%, #e6f7ff 100%);
+  border: 1px solid #b5f5ec;
+  border-radius: 12px;
+  margin-bottom: 14px;
+  transition: all 0.3s;
+}
+
+.file-info-bar:hover {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
 }
 
 .file-preview-container {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 
 .file-preview-image {
   width: 80px;
   height: 80px;
   object-fit: cover;
-  border-radius: 6px;
-  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .file-info {
@@ -1348,8 +1575,9 @@ onMounted(() => {
 }
 
 .file-name {
-  font-weight: 500;
+  font-weight: 600;
   color: #262626;
+  font-size: 14px;
 }
 
 .file-size {
@@ -1359,63 +1587,78 @@ onMounted(() => {
 }
 
 .delete-icon {
-  font-size: 14px;
-  color: #ff4d4f;
+  font-size: 16px;
+  color: #ff7875;
   cursor: pointer;
   transition: all 0.3s;
+  padding: 4px;
 }
 
 .delete-icon:hover {
-  color: #cf1322;
-  transform: scale(1.2);
+  color: #ff4d4f;
+  background: rgba(255, 77, 79, 0.1);
+  border-radius: 4px;
+  transform: scale(1.15);
 }
 
 /* 消息中的文件信息 */
 .message-file {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 6px;
-  margin-bottom: 8px;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 10px;
+  margin-bottom: 10px;
   font-size: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 .message.user .message-file {
-  background: rgba(255, 255, 255, 0.15);
-  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 1);
+  border-color: rgba(255, 255, 255, 0.25);
 }
 
 .message.user .message-file .file-name {
-  color: rgba(255, 255, 255, 0.95);
+  color: rgba(255, 255, 255, 1);
+  font-weight: 500;
 }
 
 .message.user .message-file .file-size {
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.85);
 }
 
 /* 图片预览 */
 .image-preview {
   margin-bottom: 12px;
+  max-width: 240px;
 }
 
 .image-thumbnail {
-  max-width: 200px;
-  max-height: 200px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  width: 100%;
+  max-width: 240px;
+  max-height: 240px;
+  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
   display: block;
+  object-fit: cover;
+  transition: all 0.3s;
+}
+
+.image-thumbnail:hover {
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+  transform: scale(1.02);
 }
 
 .image-info {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: 6px;
+  margin-top: 8px;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .image-name {
@@ -1423,7 +1666,7 @@ onMounted(() => {
 }
 
 .image-size {
-  opacity: 0.7;
+  opacity: 0.8;
 }
 
 .input-wrapper {
@@ -1433,8 +1676,19 @@ onMounted(() => {
 }
 
 .chat-input {
-  border-radius: 8px;
+  border-radius: 12px;
   font-size: 15px;
+  border: 1px solid #e8e8e8;
+  transition: all 0.3s;
+}
+
+.chat-input:hover {
+  border-color: #d9d9d9;
+}
+
+.chat-input:focus {
+  border-color: #1890ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
 }
 
 .input-actions {
@@ -1443,17 +1697,39 @@ onMounted(() => {
   align-items: center;
 }
 
+.input-actions :deep(.ant-btn-primary) {
+  height: 40px;
+  padding: 0 32px;
+  font-size: 15px;
+  font-weight: 500;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.2);
+}
+
+.input-actions :deep(.ant-btn-primary:hover) {
+  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.3);
+  transform: translateY(-1px);
+}
+
 /* 滚动条样式 */
 .messages-container::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
+}
+
+.messages-container::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 4px;
 }
 
 .messages-container::-webkit-scrollbar-thumb {
-  background-color: rgba(0, 0, 0, 0.2);
-  border-radius: 3px;
+  background: linear-gradient(180deg, #d9d9d9 0%, #bfbfbf 100%);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 .messages-container::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(0, 0, 0, 0.3);
+  background: linear-gradient(180deg, #bfbfbf 0%, #8c8c8c 100%);
+  background-clip: padding-box;
 }
 </style>

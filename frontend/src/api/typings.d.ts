@@ -79,6 +79,12 @@ declare namespace API {
     message?: string
   }
 
+  type BaseResponseListUserProviderKeyVO = {
+    code?: number
+    data?: UserProviderKeyVO[]
+    message?: string
+  }
+
   type BaseResponseLoginUserVO = {
     code?: number
     data?: LoginUserVO
@@ -766,6 +772,27 @@ declare namespace API {
     userPassword?: string
   }
 
+  type UserProviderKeyAddRequest = {
+    providerId?: number
+    apiKey?: string
+  }
+
+  type UserProviderKeyUpdateRequest = {
+    id?: number
+    apiKey?: string
+    status?: string
+  }
+
+  type UserProviderKeyVO = {
+    id?: number
+    providerId?: number
+    providerName?: string
+    apiKey?: string
+    status?: string
+    createTime?: string
+    updateTime?: string
+  }
+
   type UserQueryRequest = {
     pageNum?: number
     pageSize?: number
@@ -816,5 +843,22 @@ declare namespace API {
     usedTokens?: number
     balance?: number
     createTime?: string
+  }
+
+  // 流式响应类型定义
+  type StreamResponse = {
+    id?: string
+    object?: string
+    created?: number
+    model?: string
+    choices?: Array<{
+      index?: number
+      delta?: {
+        role?: string
+        content?: string
+        reasoningContent?: string
+      }
+      finishReason?: string
+    }>
   }
 }
