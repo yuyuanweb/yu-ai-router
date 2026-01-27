@@ -57,6 +57,25 @@ stripe:
 plugin:
   serpapi:
     api-key: YOUR_SERPAPI_KEY  # 请在 application-local.yml 中配置实际的 API Key
+# 监控配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+    prometheus:
+      access: unrestricted
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  prometheus:
+    metrics:
+      export:
+        enabled: true
 # springdoc-openapi 配置
 springdoc:
   group-configs:

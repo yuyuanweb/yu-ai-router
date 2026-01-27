@@ -76,6 +76,9 @@ public class ChatServiceImpl implements ChatService {
     @Resource
     private UserProviderKeyService userProviderKeyService;
 
+    @Resource
+    private com.yupi.airouter.metrics.AIMetricsCollector aiMetricsCollector;
+
     /**
      * 最大 Fallback 重试次数
      */
@@ -289,6 +292,11 @@ public class ChatServiceImpl implements ChatService {
                     .userAgent(userAgent)
                     .build());
 
+            // 收集监控指标
+            aiMetricsCollector.recordRequest(model.getModelKey(), userId, apiKeyId != null ? apiKeyId.toString() : null);
+            aiMetricsCollector.recordTokens(model.getModelKey(), totalTokens);
+            aiMetricsCollector.recordResponseTime(model.getModelKey(), duration);
+
             // 扣减用户配额和余额（BYOK 模式下免费，不扣减）
             if (userId != null && totalTokens > 0 && !isByok) {
                 quotaService.deductTokens(userId, totalTokens);
@@ -335,6 +343,10 @@ public class ChatServiceImpl implements ChatService {
                     .clientIp(clientIp)
                     .userAgent(userAgent)
                     .build());
+
+            // 收集错误指标
+            aiMetricsCollector.recordError(model.getModelKey(), "MODEL_ERROR");
+            
             throw e;
         }
     }
@@ -507,6 +519,11 @@ public class ChatServiceImpl implements ChatService {
                                 .clientIp(clientIp)
                                 .userAgent(userAgent)
                                 .build());
+
+                        // 收集监控指标（流式）
+                        aiMetricsCollector.recordRequest(selectedModel.getModelKey(), userId, apiKeyId != null ? apiKeyId.toString() : null);
+                        aiMetricsCollector.recordTokens(selectedModel.getModelKey(), totalTokens);
+                        aiMetricsCollector.recordResponseTime(selectedModel.getModelKey(), duration);
 
                 // 扣减用户配额和余额（BYOK 模式下免费，不扣减）
                 if (userId != null && totalTokens > 0 && !isByok[0]) {
