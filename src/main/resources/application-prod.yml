@@ -1,16 +1,26 @@
 # 生产环境配置
 spring:
-  # MySQL 数据库配置
+  # MySQL 数据库配置（从环境变量读取）
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://your-production-host:3306/my_db
-    username: your-username
-    password: your-password
-  # Redis 配置
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://mysql:3306/yu_ai_router?useSSL=false&characterEncoding=UTF-8&useUnicode=true}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:123456}
+  # Redis 配置（从环境变量读取）
   data:
     redis:
-      host: your-redis-host
-      port: 6379
+      host: ${SPRING_DATA_REDIS_HOST:redis}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
       database: 0
-      password: your-redis-password
-
+  # Spring AI 配置
+  ai:
+    openai:
+      base-url: https://dashscope.aliyuncs.com/compatible-mode
+      api-key: ${QWEN_API_KEY:YOUR_QWEN_API_KEY}
+# 日志配置
+logging:
+  level:
+    root: INFO
+    com.yupi.airouter: INFO
+  file:
+    name: /app/logs/yu-ai-router.log

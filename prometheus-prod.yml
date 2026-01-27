@@ -1,0 +1,20 @@
+# Prometheus 配置文件（生产环境 - Docker）
+# 用于抓取 Yu-AI-Router 的监控指标
+
+global:
+  scrape_interval: 15s # 抓取间隔
+  evaluation_interval: 15s # 评估间隔
+  external_labels:
+    cluster: 'yu-ai-router'
+    env: 'production'
+
+# 抓取配置
+scrape_configs:
+  # Yu-AI-Router 应用监控（Docker 环境）
+  - job_name: 'yu-ai-router'
+    metrics_path: '/api/actuator/prometheus'
+    static_configs:
+      - targets: ['backend:8123']
+        labels:
+          application: 'yu-ai-router'
+          instance: 'yu-ai-router-prod'
