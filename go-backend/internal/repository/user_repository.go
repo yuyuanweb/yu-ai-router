@@ -85,6 +85,39 @@ func (r *UserRepository) UpdateByID(user *entity.User) (bool, error) {
 	return result.RowsAffected > 0, nil
 }
 
+func (r *UserRepository) UpdateQuota(userID, tokenQuota int64) (bool, error) {
+	result := r.baseQuery().
+		Where("id = ?", userID).
+		Select("tokenQuota").
+		Updates(&entity.User{TokenQuota: tokenQuota})
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected > 0, nil
+}
+
+func (r *UserRepository) ResetUsedTokens(userID int64) (bool, error) {
+	result := r.baseQuery().
+		Where("id = ?", userID).
+		Select("usedTokens").
+		Updates(&entity.User{UsedTokens: 0})
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected > 0, nil
+}
+
+func (r *UserRepository) UpdateStatus(userID int64, userStatus string) (bool, error) {
+	result := r.baseQuery().
+		Where("id = ?", userID).
+		Select("userStatus").
+		Updates(&entity.User{UserStatus: userStatus})
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected > 0, nil
+}
+
 func (r *UserRepository) SoftDeleteByID(id int64) (bool, error) {
 	result := r.baseQuery().
 		Where("id = ?", id).

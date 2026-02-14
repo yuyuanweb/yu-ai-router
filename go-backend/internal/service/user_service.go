@@ -21,6 +21,7 @@ import (
 const (
 	minAccountLength  = 4
 	minPasswordLength = 8
+	unlimitedQuota    = int64(-1)
 )
 
 type UserService struct {
@@ -223,6 +224,9 @@ func (s *UserService) GetLoginUserVO(user *entity.User) vo.LoginUserVO {
 		UserAvatar:  user.UserAvatar,
 		UserProfile: user.UserProfile,
 		UserRole:    user.UserRole,
+		UserStatus:  user.UserStatus,
+		TokenQuota:  user.TokenQuota,
+		UsedTokens:  user.UsedTokens,
 		CreateTime:  user.CreateTime,
 		UpdateTime:  user.UpdateTime,
 	}
@@ -236,8 +240,85 @@ func (s *UserService) GetUserVO(user *entity.User) vo.UserVO {
 		UserAvatar:  user.UserAvatar,
 		UserProfile: user.UserProfile,
 		UserRole:    user.UserRole,
+		UserStatus:  user.UserStatus,
+		TokenQuota:  user.TokenQuota,
+		UsedTokens:  user.UsedTokens,
 		CreateTime:  user.CreateTime,
 	}
+}
+
+func (s *UserService) GetRemainingQuota(userID int64) (int64, error) {
+	user, err := s.userRepo.GetByID(userID)
+	if err != nil {
+		return 0, errno.New(errno.SystemError)
+	}
+	if user == nil {
+		return 0, errno.New(errno.NotFoundError)
+	}
+	if user.TokenQuota == unlimitedQuota {
+		return unlimitedQuota, nil
+	}
+	remaining := user.TokenQuota - user.UsedTokens
+	if remaining < 0 {
+		return 0, nil
+	}
+	return remaining, nil
+}
+
+func (s *UserService) SetUserQuota(userID, tokenQuota int64) (bool, error) {
+	if userID <= 0 {
+		return false, errno.New(errno.ParamsError)
+	}
+	ok, err := s.userRepo.UpdateQuota(userID, tokenQuota)
+	if err != nil {
+		return false, errno.New(errno.SystemError)
+	}
+	if !ok {
+		return false, errno.New(errno.OperationError)
+	}
+	return true, nil
+}
+
+func (s *UserService) ResetUserQuota(userID int64) (bool, error) {
+	if userID <= 0 {
+		return false, errno.New(errno.ParamsError)
+	}
+	ok, err := s.userRepo.ResetUsedTokens(userID)
+	if err != nil {
+		return false, errno.New(errno.SystemError)
+	}
+	if !ok {
+		return false, errno.New(errno.OperationError)
+	}
+	return true, nil
+}
+
+func (s *UserService) DisableUser(userID int64) (bool, error) {
+	if userID <= 0 {
+		return false, errno.New(errno.ParamsError)
+	}
+	ok, err := s.userRepo.UpdateStatus(userID, "disabled")
+	if err != nil {
+		return false, errno.New(errno.SystemError)
+	}
+	if !ok {
+		return false, errno.New(errno.OperationError)
+	}
+	return true, nil
+}
+
+func (s *UserService) EnableUser(userID int64) (bool, error) {
+	if userID <= 0 {
+		return false, errno.New(errno.ParamsError)
+	}
+	ok, err := s.userRepo.UpdateStatus(userID, "active")
+	if err != nil {
+		return false, errno.New(errno.SystemError)
+	}
+	if !ok {
+		return false, errno.New(errno.OperationError)
+	}
+	return true, nil
 }
 
 func (s *UserService) GetUserVOList(users []entity.User) []vo.UserVO {

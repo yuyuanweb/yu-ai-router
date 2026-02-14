@@ -14,6 +14,9 @@ type User struct {
 	UserAvatar   string    `json:"userAvatar" gorm:"column:userAvatar"`
 	UserProfile  string    `json:"userProfile" gorm:"column:userProfile"`
 	UserRole     string    `json:"userRole" gorm:"column:userRole"`
+	UserStatus   string    `json:"userStatus" gorm:"column:userStatus"`
+	TokenQuota   int64     `json:"tokenQuota,string" gorm:"column:tokenQuota"`
+	UsedTokens   int64     `json:"usedTokens,string" gorm:"column:usedTokens"`
 	EditTime     time.Time `json:"editTime" gorm:"column:editTime"`
 	CreateTime   time.Time `json:"createTime" gorm:"column:createTime"`
 	UpdateTime   time.Time `json:"updateTime" gorm:"column:updateTime"`

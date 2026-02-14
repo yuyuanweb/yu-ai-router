@@ -79,3 +79,8 @@ type UserQueryRequest struct {
 	UserProfile string `json:"userProfile"`
 	UserRole    string `json:"userRole"`
 }
+
+type QuotaUpdateRequest struct {
+	UserID     *FlexibleInt64 `json:"userId"`
+	TokenQuota *FlexibleInt64 `json:"tokenQuota"`
+}

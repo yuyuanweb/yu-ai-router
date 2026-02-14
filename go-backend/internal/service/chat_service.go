@@ -118,6 +118,7 @@ func (s *ChatService) Chat(chatRequest dto.ChatRequest, userID, apiKeyID int64, 
 		}
 		response := mapChatResponse(upstreamResp, model.ModelKey)
 		usage := response.Usage
+		cost := calculateCost(model.InputPrice, model.OutputPrice, usage.PromptTokens, usage.CompletionTokens)
 		s.requestLogService.LogRequestAsync(RequestLogInput{
 			TraceID:          traceID,
 			UserID:           ptrInt64(userID),
@@ -130,6 +131,7 @@ func (s *ChatService) Chat(chatRequest dto.ChatRequest, userID, apiKeyID int64, 
 			PromptTokens:     usage.PromptTokens,
 			CompletionTokens: usage.CompletionTokens,
 			TotalTokens:      usage.TotalTokens,
+			Cost:             cost,
 			Duration:         int(time.Since(start).Milliseconds()),
 			Status:           "success",
 			RoutingStrategy:  strategyType,
@@ -341,6 +343,7 @@ func (s *ChatService) ChatStream(chatRequest dto.ChatRequest, userID, apiKeyID i
 			PromptTokens:     promptTokens,
 			CompletionTokens: completionTokens,
 			TotalTokens:      totalTokens,
+			Cost:             calculateCost(selectedModel.InputPrice, selectedModel.OutputPrice, promptTokens, completionTokens),
 			Duration:         int(time.Since(start).Milliseconds()),
 			Status:           "success",
 			RoutingStrategy:  strategyType,
@@ -424,6 +427,12 @@ func requestSource(apiKeyID int64) string {
 		return "api"
 	}
 	return "web"
+}
+
+func calculateCost(inputPrice, outputPrice float64, promptTokens, completionTokens int) float64 {
+	inputCost := (inputPrice * float64(promptTokens)) / 1000.0
+	outputCost := (outputPrice * float64(completionTokens)) / 1000.0
+	return inputCost + outputCost
 }
 
 type upstreamChatResponse struct {

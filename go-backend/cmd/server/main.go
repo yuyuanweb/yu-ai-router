@@ -49,6 +49,7 @@ func main() {
 	userService := service.NewUserService(userRepo)
 	apiKeyService := service.NewApiKeyService(apiKeyRepo)
 	requestLogService := service.NewRequestLogService(requestLogRepo, apiKeyService)
+	billingService := service.NewBillingService(requestLogService)
 	providerService := service.NewProviderService(providerRepo)
 	modelService := service.NewModelService(modelRepo, providerRepo)
 	healthCheckService := service.NewHealthCheckService(providerRepo, modelRepo, requestLogRepo)
@@ -73,14 +74,14 @@ func main() {
 	chatService := service.NewChatService(requestLogService, routingService, modelInvokeService, providerService)
 
 	healthController := controller.NewHealthController()
-	userController := controller.NewUserController(userService)
+	userController := controller.NewUserController(userService, requestLogService, billingService)
 	apiKeyController := controller.NewApiKeyController(apiKeyService, userService)
 	providerController := controller.NewProviderController(providerService)
 	modelController := controller.NewModelController(modelService)
 	blacklistController := controller.NewBlacklistController(blacklistService)
 	chatController := controller.NewChatController(chatService, apiKeyService)
 	internalChatController := controller.NewInternalChatController(chatService, userService)
-	statsController := controller.NewStatsController(requestLogService, userService)
+	statsController := controller.NewStatsController(requestLogService, userService, billingService)
 	healthCheckTask := task.NewHealthCheckTask(healthCheckService)
 
 	engine, err := router.New(

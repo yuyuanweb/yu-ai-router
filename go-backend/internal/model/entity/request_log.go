@@ -15,6 +15,7 @@ type RequestLog struct {
 	PromptTokens     int       `json:"promptTokens" gorm:"column:promptTokens"`
 	CompletionTokens int       `json:"completionTokens" gorm:"column:completionTokens"`
 	TotalTokens      int       `json:"totalTokens" gorm:"column:totalTokens"`
+	Cost             float64   `json:"cost" gorm:"column:cost"`
 	Duration         int       `json:"duration" gorm:"column:duration"`
 	Status           string    `json:"status" gorm:"column:status"`
 	ErrorMessage     string    `json:"errorMessage" gorm:"column:errorMessage"`

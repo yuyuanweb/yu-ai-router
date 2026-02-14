@@ -4,7 +4,9 @@ import (
 	"log"
 	"time"
 
+	"github.com/yupi/airouter/go-backend/internal/common"
 	"github.com/yupi/airouter/go-backend/internal/errno"
+	"github.com/yupi/airouter/go-backend/internal/model/dto"
 	"github.com/yupi/airouter/go-backend/internal/model/entity"
 	"github.com/yupi/airouter/go-backend/internal/repository"
 )
@@ -23,6 +25,7 @@ type RequestLogInput struct {
 	PromptTokens     int
 	CompletionTokens int
 	TotalTokens      int
+	Cost             float64
 	Duration         int
 	Status           string
 	ErrorMessage     string
@@ -72,6 +75,54 @@ func (s *RequestLogService) CountUserTokens(userID int64) (int64, error) {
 	return total, nil
 }
 
+func (s *RequestLogService) CountUserRequests(userID int64) (int64, error) {
+	total, err := s.requestLogRepo.CountUserRequests(userID)
+	if err != nil {
+		return 0, errno.New(errno.SystemError)
+	}
+	return total, nil
+}
+
+func (s *RequestLogService) CountUserSuccessRequests(userID int64) (int64, error) {
+	total, err := s.requestLogRepo.CountUserSuccessRequests(userID)
+	if err != nil {
+		return 0, errno.New(errno.SystemError)
+	}
+	return total, nil
+}
+
+func (s *RequestLogService) SumUserCost(userID int64, startTime, endTime *time.Time) (float64, error) {
+	total, err := s.requestLogRepo.SumUserCost(userID, startTime, endTime)
+	if err != nil {
+		return 0, errno.New(errno.SystemError)
+	}
+	return total, nil
+}
+
+func (s *RequestLogService) GetByID(id int64) (*entity.RequestLog, error) {
+	record, err := s.requestLogRepo.GetByID(id)
+	if err != nil {
+		return nil, errno.New(errno.SystemError)
+	}
+	return record, nil
+}
+
+func (s *RequestLogService) PageByQuery(req dto.RequestLogQueryRequest) (common.PageResponse[entity.RequestLog], error) {
+	page, err := s.requestLogRepo.PageByQuery(req)
+	if err != nil {
+		return common.PageResponse[entity.RequestLog]{}, errno.New(errno.SystemError)
+	}
+	return page, nil
+}
+
+func (s *RequestLogService) GetUserDailyStats(userID int64, start, end time.Time) ([]map[string]any, error) {
+	rows, err := s.requestLogRepo.GetUserDailyStats(userID, start, end)
+	if err != nil {
+		return nil, errno.New(errno.SystemError)
+	}
+	return rows, nil
+}
+
 func (s *RequestLogService) logRequest(input RequestLogInput) error {
 	isFallback := 0
 	if input.IsFallback {
@@ -102,6 +153,7 @@ func (s *RequestLogService) logRequest(input RequestLogInput) error {
 		PromptTokens:     input.PromptTokens,
 		CompletionTokens: input.CompletionTokens,
 		TotalTokens:      input.TotalTokens,
+		Cost:             input.Cost,
 		Duration:         input.Duration,
 		Status:           input.Status,
 		ErrorMessage:     input.ErrorMessage,
