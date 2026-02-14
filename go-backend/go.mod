@@ -1,12 +1,13 @@
 module github.com/yupi/airouter/go-backend
 
-go 1.23.12
+go 1.24.1
 
 require (
 	github.com/gin-contrib/cors v1.7.6
 	github.com/gin-contrib/sessions v1.0.4
 	github.com/gin-gonic/gin v1.11.0
 	github.com/gomodule/redigo v1.9.2
+	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	github.com/stripe/stripe-go/v84 v84.3.0
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/gorm v1.31.0

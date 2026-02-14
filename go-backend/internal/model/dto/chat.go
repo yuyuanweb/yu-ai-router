@@ -13,4 +13,8 @@ type ChatRequest struct {
 	MaxTokens       *int          `json:"max_tokens"`
 	EnableReasoning *bool         `json:"enable_reasoning"`
 	RoutingStrategy string        `json:"routing_strategy"`
+	PluginKey       string        `json:"plugin_key"`
+	FileURL         string        `json:"file_url"`
+	FileBytes       []byte        `json:"-"`
+	FileType        string        `json:"file_type"`
 }

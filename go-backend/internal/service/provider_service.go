@@ -99,6 +99,20 @@ func (s *ProviderService) GetProviderByID(id int64) (*entity.ModelProvider, erro
 	return provider, nil
 }
 
+func (s *ProviderService) GetProviderByName(providerName string) (*entity.ModelProvider, error) {
+	if strings.TrimSpace(providerName) == "" {
+		return nil, errno.New(errno.ParamsError)
+	}
+	provider, err := s.providerRepo.GetByProviderName(providerName)
+	if err != nil {
+		return nil, errno.New(errno.SystemError)
+	}
+	if provider == nil {
+		return nil, errno.New(errno.NotFoundError)
+	}
+	return provider, nil
+}
+
 func (s *ProviderService) ListProviderVOByPage(req dto.ProviderQueryRequest) (common.PageResponse[vo.ProviderVO], error) {
 	pageNum := req.PageNum
 	if pageNum <= 0 {

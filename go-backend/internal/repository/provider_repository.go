@@ -50,6 +50,18 @@ func (r *ProviderRepository) GetByID(id int64) (*entity.ModelProvider, error) {
 	return &provider, nil
 }
 
+func (r *ProviderRepository) GetByProviderName(providerName string) (*entity.ModelProvider, error) {
+	var provider entity.ModelProvider
+	err := r.baseQuery().Where("providerName = ?", providerName).Take(&provider).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &provider, nil
+}
+
 func (r *ProviderRepository) ListByIDs(ids []int64) ([]entity.ModelProvider, error) {
 	if len(ids) == 0 {
 		return make([]entity.ModelProvider, 0), nil

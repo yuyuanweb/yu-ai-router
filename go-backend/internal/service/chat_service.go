@@ -25,6 +25,7 @@ type ChatService struct {
 	routingService     *RoutingService
 	modelInvokeService *ModelInvokeService
 	providerService    *ProviderService
+	pluginService      *PluginService
 	userService        *UserService
 	balanceService     *BalanceService
 	chatCacheService   *ChatCacheService
@@ -35,6 +36,7 @@ func NewChatService(
 	routingService *RoutingService,
 	modelInvokeService *ModelInvokeService,
 	providerService *ProviderService,
+	pluginService *PluginService,
 	userService *UserService,
 	balanceService *BalanceService,
 	chatCacheService *ChatCacheService,
@@ -44,6 +46,7 @@ func NewChatService(
 		routingService:     routingService,
 		modelInvokeService: modelInvokeService,
 		providerService:    providerService,
+		pluginService:      pluginService,
 		userService:        userService,
 		balanceService:     balanceService,
 		chatCacheService:   chatCacheService,
@@ -55,6 +58,14 @@ func (s *ChatService) Chat(chatRequest dto.ChatRequest, userID, apiKeyID int64, 
 	requestedModel := chatRequest.Model
 	traceID := newTraceID()
 	strategyType := s.routingService.DetermineStrategyType(chatRequest.RoutingStrategy, requestedModel)
+	if strings.TrimSpace(chatRequest.PluginKey) != "" {
+		var pluginErr error
+		chatRequest, pluginErr = s.injectPluginContext(chatRequest, userID)
+		if pluginErr != nil {
+			log.Printf("chat plugin inject failed: userId=%d apiKeyId=%d plugin=%s err=%v", userID, apiKeyID, chatRequest.PluginKey, pluginErr)
+			return nil, pluginErr
+		}
+	}
 
 	if cached, ok := s.chatCacheService.Get(chatRequest); ok && cached != nil {
 		s.requestLogService.LogRequestAsync(RequestLogInput{
@@ -245,6 +256,15 @@ func (s *ChatService) ChatStream(chatRequest dto.ChatRequest, userID, apiKeyID i
 		traceID := newTraceID()
 		created := time.Now().Unix()
 		strategyType := s.routingService.DetermineStrategyType(chatRequest.RoutingStrategy, requestedModel)
+		if strings.TrimSpace(chatRequest.PluginKey) != "" {
+			var pluginErr error
+			chatRequest, pluginErr = s.injectPluginContext(chatRequest, userID)
+			if pluginErr != nil {
+				log.Printf("chat stream plugin inject failed: userId=%d apiKeyId=%d plugin=%s err=%v", userID, apiKeyID, chatRequest.PluginKey, pluginErr)
+				errChan <- pluginErr
+				return
+			}
+		}
 		if userID > 0 {
 			disabled, disabledErr := s.userService.IsUserDisabled(userID)
 			if disabledErr != nil {
@@ -548,6 +568,72 @@ func calculateCost(inputPrice, outputPrice float64, promptTokens, completionToke
 	inputCost := (inputPrice * float64(promptTokens)) / 1000.0
 	outputCost := (outputPrice * float64(completionTokens)) / 1000.0
 	return inputCost + outputCost
+}
+
+func (s *ChatService) injectPluginContext(chatRequest dto.ChatRequest, userID int64) (dto.ChatRequest, error) {
+	pluginKey := strings.TrimSpace(chatRequest.PluginKey)
+	if pluginKey == "" {
+		return chatRequest, nil
+	}
+
+	request := dto.PluginExecuteRequest{
+		PluginKey: pluginKey,
+		Input:     extractLastUserMessage(chatRequest.Messages),
+		FileURL:   chatRequest.FileURL,
+		FileBytes: chatRequest.FileBytes,
+		FileType:  chatRequest.FileType,
+	}
+	var pluginUserID *int64
+	if userID > 0 {
+		pluginUserID = &userID
+	}
+	pluginResult, err := s.pluginService.ExecutePlugin(request, pluginUserID)
+	if err != nil {
+		return chatRequest, err
+	}
+	if !pluginResult.Success {
+		return chatRequest, errno.NewWithMessage(errno.OperationError, "插件执行失败: "+pluginResult.ErrorMessage)
+	}
+
+	pluginContext := buildPluginContextMessage(pluginKey, pluginResult.Content)
+	newMessages := make([]dto.ChatMessage, 0, len(chatRequest.Messages)+1)
+	newMessages = append(newMessages, dto.ChatMessage{
+		Role:    "system",
+		Content: pluginContext,
+	})
+	newMessages = append(newMessages, chatRequest.Messages...)
+	chatRequest.Messages = newMessages
+	return chatRequest, nil
+}
+
+func extractLastUserMessage(messages []dto.ChatMessage) string {
+	for index := len(messages) - 1; index >= 0; index-- {
+		if strings.EqualFold(strings.TrimSpace(messages[index].Role), "user") {
+			return strings.TrimSpace(messages[index].Content)
+		}
+	}
+	return ""
+}
+
+func buildPluginContextMessage(pluginKey, content string) string {
+	switch pluginKey {
+	case pluginKeyWebSearch:
+		return "以下是实时网络搜索的结果，请根据这些信息回答用户的问题：\n\n" +
+			content +
+			"\n\n请基于以上搜索结果，准确、简洁地回答用户的问题。如果搜索结果中没有相关信息，请如实告知。"
+	case pluginKeyPDFParser:
+		return "以下是用户上传的 PDF 文档内容：\n\n" +
+			content +
+			"\n\n请基于以上文档内容，回答用户的问题。如果问题与文档内容无关，请如实告知。"
+	case pluginKeyImageRec:
+		return "以下是用户上传图片的识别结果：\n\n" +
+			content +
+			"\n\n请基于以上图片识别结果，回答用户的问题。"
+	default:
+		return "以下是插件返回的额外信息：\n\n" +
+			content +
+			"\n\n请基于以上信息回答用户的问题。"
+	}
 }
 
 type upstreamChatResponse struct {

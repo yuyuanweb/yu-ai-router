@@ -32,6 +32,7 @@ func New(
 	chatController *controller.ChatController,
 	internalChatController *controller.InternalChatController,
 	statsController *controller.StatsController,
+	pluginController *controller.PluginController,
 	rechargeController *controller.RechargeController,
 	stripeWebhookController *controller.StripeWebhookController,
 	balanceController *controller.BalanceController,
@@ -134,6 +135,17 @@ func New(
 		statsGroup.GET("/history/detail", statsController.GetHistoryDetail)
 		statsGroup.POST("/history/page", middleware.RequireAdmin(userService), statsController.PageHistory)
 
+		pluginGroup := apiGroup.Group("/plugin")
+		pluginGroup.GET("/list/enabled", pluginController.ListEnabledPlugins)
+		pluginGroup.GET("/get", pluginController.GetPlugin)
+		pluginGroup.POST("/execute", pluginController.ExecutePlugin)
+		pluginGroup.GET("/list", middleware.RequireAdmin(userService), pluginController.ListPlugins)
+		pluginGroup.POST("/update", middleware.RequireAdmin(userService), pluginController.UpdatePlugin)
+		pluginGroup.POST("/enable", middleware.RequireAdmin(userService), pluginController.EnablePlugin)
+		pluginGroup.POST("/disable", middleware.RequireAdmin(userService), pluginController.DisablePlugin)
+		pluginGroup.POST("/reload", middleware.RequireAdmin(userService), pluginController.ReloadPlugin)
+		pluginGroup.POST("/reload/all", middleware.RequireAdmin(userService), pluginController.ReloadAllPlugins)
+
 		rechargeGroup := apiGroup.Group("/recharge")
 		rechargeGroup.GET("/stripe/success", rechargeController.StripeSuccess)
 		rechargeGroup.GET("/stripe/cancel", rechargeController.StripeCancel)
@@ -158,6 +170,7 @@ func New(
 		internalChatGroup.Use(middleware.RequireLogin(userService))
 		internalChatGroup.Use(middleware.RateLimit(rateLimitService, middleware.RateLimitTypeIP, internalChatRateLimitPerSecond, time.Second))
 		internalChatGroup.POST("/completions", internalChatController.ChatCompletions)
+		internalChatGroup.POST("/completions/upload", internalChatController.ChatCompletionsWithFile)
 
 		chatGroup := apiGroup.Group("/v1/chat")
 		chatGroup.Use(middleware.RateLimit(rateLimitService, middleware.RateLimitTypeAPIKey, apiChatRateLimitPerSecond, time.Second))
