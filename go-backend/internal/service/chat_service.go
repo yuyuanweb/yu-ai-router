@@ -21,10 +21,10 @@ const (
 )
 
 type ChatService struct {
-	requestLogService *RequestLogService
-	routingService    *RoutingService
+	requestLogService  *RequestLogService
+	routingService     *RoutingService
 	modelInvokeService *ModelInvokeService
-	providerService   *ProviderService
+	providerService    *ProviderService
 }
 
 func NewChatService(
@@ -34,10 +34,10 @@ func NewChatService(
 	providerService *ProviderService,
 ) *ChatService {
 	return &ChatService{
-		requestLogService: requestLogService,
-		routingService:    routingService,
+		requestLogService:  requestLogService,
+		routingService:     routingService,
 		modelInvokeService: modelInvokeService,
-		providerService:   providerService,
+		providerService:    providerService,
 	}
 }
 
@@ -163,8 +163,8 @@ func (s *ChatService) Chat(chatRequest dto.ChatRequest, userID, apiKeyID int64, 
 	return nil, errno.NewWithMessage(errno.SystemError, errMsg)
 }
 
-func (s *ChatService) ChatStream(chatRequest dto.ChatRequest, userID, apiKeyID int64, clientIP, userAgent string) (<-chan string, <-chan error) {
-	streamChan := make(chan string, 32)
+func (s *ChatService) ChatStream(chatRequest dto.ChatRequest, userID, apiKeyID int64, clientIP, userAgent string) (<-chan dto.StreamResponse, <-chan error) {
+	streamChan := make(chan dto.StreamResponse, 32)
 	errChan := make(chan error, 1)
 
 	go func() {
@@ -174,6 +174,7 @@ func (s *ChatService) ChatStream(chatRequest dto.ChatRequest, userID, apiKeyID i
 		start := time.Now()
 		requestedModel := chatRequest.Model
 		traceID := newTraceID()
+		created := time.Now().Unix()
 		strategyType := s.routingService.DetermineStrategyType(chatRequest.RoutingStrategy, requestedModel)
 		selectedModel, _, err := s.routingService.SelectModel(strategyType, constant.ModelTypeChat, requestedModel)
 		if err != nil {
@@ -221,9 +222,7 @@ func (s *ChatService) ChatStream(chatRequest dto.ChatRequest, userID, apiKeyID i
 		promptTokens := 0
 		completionTokens := 0
 		totalTokens := 0
-		reasoningEnabled := chatRequest.EnableReasoning != nil && *chatRequest.EnableReasoning
-		thinkingStarted := false
-		thinkingEnded := false
+		isFirstChunk := true
 		hasOutput := false
 		reader := bufio.NewReader(resp.Body)
 
@@ -283,46 +282,48 @@ func (s *ChatService) ChatStream(chatRequest dto.ChatRequest, userID, apiKeyID i
 
 			delta := chunk.Choices[0].Delta
 			reasoningContent := strings.TrimSpace(delta.ReasoningContent)
-			if reasoningEnabled && reasoningContent != "" {
-				escapedReasoning := escapeNewlines(reasoningContent)
-				if !thinkingStarted {
-					thinkingStarted = true
-					streamChan <- "[THINKING]" + escapedReasoning + "\\n"
-				} else {
-					streamChan <- escapedReasoning + "\\n"
-				}
-				hasOutput = true
-				continue
-			}
-
 			content := delta.Content
-			if reasoningEnabled && thinkingStarted && !thinkingEnded {
-				thinkingEnded = true
-				if content != "" {
-					streamChan <- "[/THINKING]\\n" + escapeNewlines(content)
-					hasOutput = true
-					continue
-				}
-				streamChan <- "[/THINKING]"
-				hasOutput = true
+			if reasoningContent == "" && content == "" {
 				continue
 			}
-			if content == "" {
-				continue
+			responseDelta := dto.StreamResponseDelta{
+				Content:          content,
+				ReasoningContent: reasoningContent,
 			}
-			streamChan <- escapeNewlines(content)
+			if isFirstChunk {
+				responseDelta.Role = "assistant"
+				isFirstChunk = false
+			}
+			streamChan <- dto.StreamResponse{
+				ID:      traceID,
+				Object:  "chat.completion.chunk",
+				Created: created,
+				Model:   selectedModel.ModelKey,
+				Choices: []dto.StreamResponseChoice{
+					{
+						Index: 0,
+						Delta: responseDelta,
+					},
+				},
+			}
 			hasOutput = true
 		}
 
-		if reasoningEnabled && thinkingStarted && !thinkingEnded {
-			streamChan <- "[/THINKING]"
-			hasOutput = true
-		}
-		if reasoningEnabled && !thinkingStarted {
-			log.Printf("chat stream reasoning requested but no reasoning chunk returned: userId=%d apiKeyId=%d model=%s", userID, apiKeyID, selectedModel.ModelKey)
-		}
 		if !hasOutput {
 			log.Printf("chat stream finished with empty output: userId=%d apiKeyId=%d model=%s", userID, apiKeyID, selectedModel.ModelKey)
+		}
+		streamChan <- dto.StreamResponse{
+			ID:      traceID,
+			Object:  "chat.completion.chunk",
+			Created: created,
+			Model:   selectedModel.ModelKey,
+			Choices: []dto.StreamResponseChoice{
+				{
+					Index:        0,
+					Delta:        dto.StreamResponseDelta{},
+					FinishReason: "stop",
+				},
+			},
 		}
 
 		if totalTokens == 0 {
@@ -410,10 +411,6 @@ func withModel(request dto.ChatRequest, modelName string) dto.ChatRequest {
 	return request
 }
 
-func escapeNewlines(text string) string {
-	return strings.ReplaceAll(text, "\n", "\\n")
-}
-
 func newTraceID() string {
 	buffer := make([]byte, 12)
 	if _, err := rand.Read(buffer); err != nil {
@@ -435,8 +432,8 @@ type upstreamChatResponse struct {
 	Created int64  `json:"created"`
 	Model   string `json:"model"`
 	Choices []struct {
-		Index        int `json:"index"`
-		Message      struct {
+		Index   int `json:"index"`
+		Message struct {
 			Role    string `json:"role"`
 			Content string `json:"content"`
 		} `json:"message"`

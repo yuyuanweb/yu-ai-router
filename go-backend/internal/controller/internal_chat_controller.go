@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 
@@ -75,11 +76,14 @@ func (c *InternalChatController) stream(ctx *gin.Context, request dto.ChatReques
 		select {
 		case chunk, open := <-streamChan:
 			if !open {
-				_, _ = ctx.Writer.WriteString("data: [DONE]\n\n")
-				flusher.Flush()
 				return
 			}
-			_, _ = ctx.Writer.WriteString("data: " + chunk + "\n\n")
+			payload, marshalErr := json.Marshal(chunk)
+			if marshalErr != nil {
+				log.Printf("internal chat stream marshal chunk failed: userId=%d apiKeyId=%d err=%v", userID, apiKeyID, marshalErr)
+				continue
+			}
+			_, _ = ctx.Writer.WriteString("data: " + string(payload) + "\n\n")
 			flusher.Flush()
 		case err, open := <-errChan:
 			if open && err != nil {
