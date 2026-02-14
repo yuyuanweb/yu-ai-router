@@ -35,11 +35,31 @@ func main() {
 	}
 
 	userRepo := repository.NewUserRepository(db)
+	apiKeyRepo := repository.NewApiKeyRepository(db)
+	requestLogRepo := repository.NewRequestLogRepository(db)
+
 	userService := service.NewUserService(userRepo)
+	apiKeyService := service.NewApiKeyService(apiKeyRepo)
+	requestLogService := service.NewRequestLogService(requestLogRepo, apiKeyService)
+	chatService := service.NewChatService(cfg, requestLogService)
+
 	healthController := controller.NewHealthController()
 	userController := controller.NewUserController(userService)
+	apiKeyController := controller.NewApiKeyController(apiKeyService, userService)
+	chatController := controller.NewChatController(chatService, apiKeyService)
+	internalChatController := controller.NewInternalChatController(chatService, apiKeyService, userService)
+	statsController := controller.NewStatsController(requestLogService, userService)
 
-	engine, err := router.New(cfg, healthController, userController, userService)
+	engine, err := router.New(
+		cfg,
+		healthController,
+		userController,
+		apiKeyController,
+		chatController,
+		internalChatController,
+		statsController,
+		userService,
+	)
 	if err != nil {
 		log.Fatalf("build router failed: %v", err)
 	}

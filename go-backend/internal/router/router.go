@@ -19,6 +19,10 @@ func New(
 	cfg *config.Config,
 	healthController *controller.HealthController,
 	userController *controller.UserController,
+	apiKeyController *controller.ApiKeyController,
+	chatController *controller.ChatController,
+	internalChatController *controller.InternalChatController,
+	statsController *controller.StatsController,
 	userService *service.UserService,
 ) (*gin.Engine, error) {
 	engine := gin.New()
@@ -62,6 +66,24 @@ func New(
 		userGroup.POST("/delete", middleware.RequireAdmin(userService), userController.DeleteUser)
 		userGroup.POST("/update", middleware.RequireAdmin(userService), userController.UpdateUser)
 		userGroup.POST("/list/page/vo", middleware.RequireAdmin(userService), userController.ListUserVOByPage)
+
+		apiKeyGroup := apiGroup.Group("/api/key")
+		apiKeyGroup.Use(middleware.RequireLogin(userService))
+		apiKeyGroup.POST("/create", apiKeyController.CreateApiKey)
+		apiKeyGroup.GET("/list/my", apiKeyController.ListMyApiKeys)
+		apiKeyGroup.POST("/revoke", apiKeyController.RevokeApiKey)
+
+		statsGroup := apiGroup.Group("/stats")
+		statsGroup.Use(middleware.RequireLogin(userService))
+		statsGroup.GET("/my/tokens", statsController.GetMyTokenStats)
+		statsGroup.GET("/my/logs", statsController.GetMyLogs)
+
+		internalChatGroup := apiGroup.Group("/internal/chat")
+		internalChatGroup.Use(middleware.RequireLogin(userService))
+		internalChatGroup.POST("/completions", internalChatController.ChatCompletions)
+
+		chatGroup := apiGroup.Group("/v1/chat")
+		chatGroup.POST("/completions", chatController.ChatCompletions)
 	}
 
 	return engine, nil
