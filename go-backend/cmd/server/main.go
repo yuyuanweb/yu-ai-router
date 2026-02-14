@@ -44,6 +44,7 @@ func main() {
 	providerRepo := repository.NewProviderRepository(db)
 	modelRepo := repository.NewModelRepository(db)
 	pluginRepo := repository.NewPluginRepository(db)
+	userProviderKeyRepo := repository.NewUserProviderKeyRepository(db)
 	rechargeRecordRepo := repository.NewRechargeRecordRepository(db)
 	billingRecordRepo := repository.NewBillingRecordRepository(db)
 	imageGenerationRecordRepo := repository.NewImageGenerationRecordRepository(db)
@@ -60,6 +61,7 @@ func main() {
 	stripePaymentService := service.NewStripePaymentService(cfg, rechargeService)
 	chatCacheService := service.NewChatCacheService(redisPool, cfg)
 	providerService := service.NewProviderService(providerRepo)
+	userProviderKeyService := service.NewUserProviderKeyService(userProviderKeyRepo, providerService, cfg)
 	pluginService := service.NewPluginService(pluginRepo, providerService, cfg)
 	if err = pluginService.InitPlugins(); err != nil {
 		log.Fatalf("init plugins failed: %v", err)
@@ -85,7 +87,7 @@ func main() {
 		adapter.NewDefaultAdapter(),
 	)
 	modelInvokeService := service.NewModelInvokeService(adapterFactory)
-	chatService := service.NewChatService(requestLogService, routingService, modelInvokeService, providerService, pluginService, userService, balanceService, chatCacheService)
+	chatService := service.NewChatService(requestLogService, routingService, modelInvokeService, providerService, userProviderKeyService, pluginService, userService, balanceService, chatCacheService)
 
 	healthController := controller.NewHealthController()
 	userController := controller.NewUserController(userService, requestLogService, billingService)
@@ -97,6 +99,7 @@ func main() {
 	internalChatController := controller.NewInternalChatController(chatService, userService)
 	statsController := controller.NewStatsController(requestLogService, userService, billingService)
 	pluginController := controller.NewPluginController(pluginService, userService)
+	userProviderKeyController := controller.NewUserProviderKeyController(userProviderKeyService, userService)
 	rechargeController := controller.NewRechargeController(rechargeService, stripePaymentService, userService, cfg)
 	stripeWebhookController := controller.NewStripeWebhookController(stripePaymentService)
 	balanceController := controller.NewBalanceController(balanceService, billingRecordService, userService)
@@ -115,6 +118,7 @@ func main() {
 		internalChatController,
 		statsController,
 		pluginController,
+		userProviderKeyController,
 		rechargeController,
 		stripeWebhookController,
 		balanceController,

@@ -49,6 +49,7 @@ type Config struct {
 	StripeSuccessURL   string
 	StripeCancelURL    string
 	PluginSerpAPIKey   string
+	EncryptionSecretKey string
 }
 
 func Load() (*Config, error) {
@@ -75,6 +76,7 @@ func Load() (*Config, error) {
 	stripeSuccessURLFlag := flag.String("stripe-success-url", "", "stripe success callback url")
 	stripeCancelURLFlag := flag.String("stripe-cancel-url", "", "stripe cancel callback url")
 	pluginSerpAPIKeyFlag := flag.String("plugin-serpapi-api-key", "", "serpapi api key for web_search plugin")
+	encryptionSecretKeyFlag := flag.String("encryption-secret-key", "", "secret key for BYOK api key encryption")
 	flag.Parse()
 	if *envFlag != "" && *envFlag != envName {
 		loadEnvFiles(*envFlag, baseEnv)
@@ -111,6 +113,7 @@ func Load() (*Config, error) {
 		StripeSuccessURL: pickString(*stripeSuccessURLFlag, os.Getenv("STRIPE_SUCCESS_URL"), defaultStripeSuccessURL),
 		StripeCancelURL:  pickString(*stripeCancelURLFlag, os.Getenv("STRIPE_CANCEL_URL"), defaultStripeCancelURL),
 		PluginSerpAPIKey: pickString(*pluginSerpAPIKeyFlag, os.Getenv("PLUGIN_SERPAPI_API_KEY"), ""),
+		EncryptionSecretKey: pickString(*encryptionSecretKeyFlag, os.Getenv("ENCRYPTION_SECRET_KEY"), ""),
 	}, nil
 }
 

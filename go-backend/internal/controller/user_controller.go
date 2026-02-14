@@ -42,7 +42,7 @@ func (u *UserController) UserRegister(c *gin.Context) {
 		u.handleError(c, err)
 		return
 	}
-	common.Success(c, strconv.FormatInt(userID, 10))
+	common.Success(c, userID)
 }
 
 func (u *UserController) UserLogin(c *gin.Context) {
@@ -88,7 +88,7 @@ func (u *UserController) AddUser(c *gin.Context) {
 		u.handleError(c, err)
 		return
 	}
-	common.Success(c, strconv.FormatInt(userID, 10))
+	common.Success(c, userID)
 }
 
 func (u *UserController) GetUserByID(c *gin.Context) {

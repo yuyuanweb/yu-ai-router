@@ -33,6 +33,7 @@ func New(
 	internalChatController *controller.InternalChatController,
 	statsController *controller.StatsController,
 	pluginController *controller.PluginController,
+	userProviderKeyController *controller.UserProviderKeyController,
 	rechargeController *controller.RechargeController,
 	stripeWebhookController *controller.StripeWebhookController,
 	balanceController *controller.BalanceController,
@@ -145,6 +146,13 @@ func New(
 		pluginGroup.POST("/disable", middleware.RequireAdmin(userService), pluginController.DisablePlugin)
 		pluginGroup.POST("/reload", middleware.RequireAdmin(userService), pluginController.ReloadPlugin)
 		pluginGroup.POST("/reload/all", middleware.RequireAdmin(userService), pluginController.ReloadAllPlugins)
+
+		byokGroup := apiGroup.Group("/byok")
+		byokGroup.Use(middleware.RequireLogin(userService))
+		byokGroup.POST("/add", userProviderKeyController.AddUserProviderKey)
+		byokGroup.POST("/update", userProviderKeyController.UpdateUserProviderKey)
+		byokGroup.POST("/delete", userProviderKeyController.DeleteUserProviderKey)
+		byokGroup.GET("/my/list", userProviderKeyController.ListMyProviderKeys)
 
 		rechargeGroup := apiGroup.Group("/recharge")
 		rechargeGroup.GET("/stripe/success", rechargeController.StripeSuccess)

@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"strings"
@@ -25,6 +26,7 @@ type ChatService struct {
 	routingService     *RoutingService
 	modelInvokeService *ModelInvokeService
 	providerService    *ProviderService
+	userProviderKeyService *UserProviderKeyService
 	pluginService      *PluginService
 	userService        *UserService
 	balanceService     *BalanceService
@@ -36,6 +38,7 @@ func NewChatService(
 	routingService *RoutingService,
 	modelInvokeService *ModelInvokeService,
 	providerService *ProviderService,
+	userProviderKeyService *UserProviderKeyService,
 	pluginService *PluginService,
 	userService *UserService,
 	balanceService *BalanceService,
@@ -46,6 +49,7 @@ func NewChatService(
 		routingService:     routingService,
 		modelInvokeService: modelInvokeService,
 		providerService:    providerService,
+		userProviderKeyService: userProviderKeyService,
 		pluginService:      pluginService,
 		userService:        userService,
 		balanceService:     balanceService,
@@ -57,6 +61,17 @@ func (s *ChatService) Chat(chatRequest dto.ChatRequest, userID, apiKeyID int64, 
 	start := time.Now()
 	requestedModel := chatRequest.Model
 	traceID := newTraceID()
+
+	if userID > 0 {
+		disabled, disabledErr := s.userService.IsUserDisabled(userID)
+		if disabledErr != nil {
+			return nil, disabledErr
+		}
+		if disabled {
+			return nil, errno.NewWithMessage(errno.ForbiddenError, "账号已被禁用，无法使用服务")
+		}
+	}
+
 	strategyType := s.routingService.DetermineStrategyType(chatRequest.RoutingStrategy, requestedModel)
 	if strings.TrimSpace(chatRequest.PluginKey) != "" {
 		var pluginErr error
@@ -64,6 +79,40 @@ func (s *ChatService) Chat(chatRequest dto.ChatRequest, userID, apiKeyID int64, 
 		if pluginErr != nil {
 			log.Printf("chat plugin inject failed: userId=%d apiKeyId=%d plugin=%s err=%v", userID, apiKeyID, chatRequest.PluginKey, pluginErr)
 			return nil, pluginErr
+		}
+	}
+
+	selectedModel, fallbackModels, err := s.routingService.SelectModel(strategyType, constant.ModelTypeChat, requestedModel)
+	if err != nil {
+		log.Printf("chat select model failed: userId=%d apiKeyId=%d strategy=%s err=%v", userID, apiKeyID, strategyType, err)
+		return nil, errno.NewWithMessage(errno.SystemError, "选择模型失败")
+	}
+	if selectedModel == nil {
+		return nil, errno.NewWithMessage(errno.ParamsError, "没有可用的模型")
+	}
+
+	willUseByok := false
+	if userID > 0 {
+		hasByok, byokErr := s.userProviderKeyService.HasUserProviderKey(userID, selectedModel.ProviderID)
+		if byokErr != nil {
+			return nil, byokErr
+		}
+		willUseByok = hasByok
+		if !willUseByok {
+			quotaEnough, quotaErr := s.userService.CheckQuota(userID)
+			if quotaErr != nil {
+				return nil, quotaErr
+			}
+			if !quotaEnough {
+				return nil, errno.NewWithMessage(errno.OperationError, "Token配额已用尽，请联系管理员增加配额")
+			}
+			currentBalance, balanceErr := s.balanceService.GetUserBalance(userID)
+			if balanceErr != nil {
+				return nil, balanceErr
+			}
+			if currentBalance <= 0 {
+				return nil, errno.NewWithMessage(errno.OperationError, fmt.Sprintf("账户余额不足，当前余额：¥%.4f，请先充值", currentBalance))
+			}
 		}
 	}
 
@@ -84,38 +133,6 @@ func (s *ChatService) Chat(chatRequest dto.ChatRequest, userID, apiKeyID int64, 
 		})
 		return cached, nil
 	}
-	if userID > 0 {
-		disabled, disabledErr := s.userService.IsUserDisabled(userID)
-		if disabledErr != nil {
-			return nil, disabledErr
-		}
-		if disabled {
-			return nil, errno.NewWithMessage(errno.ForbiddenError, "账号已被禁用，无法使用服务")
-		}
-		quotaEnough, quotaErr := s.userService.CheckQuota(userID)
-		if quotaErr != nil {
-			return nil, quotaErr
-		}
-		if !quotaEnough {
-			return nil, errno.NewWithMessage(errno.OperationError, "Token配额已用尽，请联系管理员增加配额")
-		}
-		currentBalance, balanceErr := s.balanceService.GetUserBalance(userID)
-		if balanceErr != nil {
-			return nil, balanceErr
-		}
-		if currentBalance <= 0 {
-			return nil, errno.NewWithMessage(errno.OperationError, "账户余额不足，请先充值")
-		}
-	}
-
-	selectedModel, fallbackModels, err := s.routingService.SelectModel(strategyType, constant.ModelTypeChat, requestedModel)
-	if err != nil {
-		log.Printf("chat select model failed: userId=%d apiKeyId=%d strategy=%s err=%v", userID, apiKeyID, strategyType, err)
-		return nil, errno.NewWithMessage(errno.SystemError, "选择模型失败")
-	}
-	if selectedModel == nil {
-		return nil, errno.NewWithMessage(errno.ParamsError, "没有可用的模型")
-	}
 
 	candidates := append([]entity.Model{*selectedModel}, fallbackModels...)
 	if len(candidates) > maxFallbackRetries+1 {
@@ -129,6 +146,31 @@ func (s *ChatService) Chat(chatRequest dto.ChatRequest, userID, apiKeyID int64, 
 			lastErr = providerErr
 			log.Printf("chat get provider failed: userId=%d apiKeyId=%d model=%s providerId=%d err=%v", userID, apiKeyID, model.ModelKey, model.ProviderID, providerErr)
 			continue
+		}
+		usingByok := false
+		if userID > 0 {
+			userAPIKey, byokErr := s.userProviderKeyService.GetUserProviderAPIKey(userID, model.ProviderID)
+			if byokErr != nil {
+				lastErr = byokErr
+				log.Printf("chat load byok failed: userId=%d apiKeyId=%d model=%s providerId=%d err=%v", userID, apiKeyID, model.ModelKey, model.ProviderID, byokErr)
+				continue
+			}
+			if strings.TrimSpace(userAPIKey) != "" {
+				provider = &entity.ModelProvider{
+					ID:           provider.ID,
+					ProviderName: provider.ProviderName,
+					DisplayName:  provider.DisplayName,
+					BaseURL:      provider.BaseURL,
+					APIKey:       userAPIKey,
+					Status:       provider.Status,
+					HealthStatus: provider.HealthStatus,
+					AvgLatency:   provider.AvgLatency,
+					SuccessRate:  provider.SuccessRate,
+					Priority:     provider.Priority,
+					Config:       provider.Config,
+				}
+				usingByok = true
+			}
 		}
 		body, invokeErr := s.modelInvokeService.Invoke(&model, provider, withModel(chatRequest, model.ModelKey))
 		if invokeErr != nil {
@@ -200,7 +242,7 @@ func (s *ChatService) Chat(chatRequest dto.ChatRequest, userID, apiKeyID int64, 
 			ClientIP:         clientIP,
 			UserAgent:        userAgent,
 		})
-		if userID > 0 && cost > 0 {
+		if userID > 0 && cost > 0 && !usingByok {
 			description := "网页调用消费 - " + model.ModelKey
 			if apiKeyID > 0 {
 				description = "API调用消费 - " + model.ModelKey
@@ -210,7 +252,7 @@ func (s *ChatService) Chat(chatRequest dto.ChatRequest, userID, apiKeyID int64, 
 				return nil, deductErr
 			}
 		}
-		if userID > 0 && usage.TotalTokens > 0 {
+		if userID > 0 && usage.TotalTokens > 0 && !usingByok {
 			if quotaErr := s.userService.DeductTokens(userID, int64(usage.TotalTokens)); quotaErr != nil {
 				log.Printf("chat deduct tokens failed: userId=%d apiKeyId=%d model=%s tokens=%d err=%v", userID, apiKeyID, model.ModelKey, usage.TotalTokens, quotaErr)
 				return nil, quotaErr
@@ -255,16 +297,6 @@ func (s *ChatService) ChatStream(chatRequest dto.ChatRequest, userID, apiKeyID i
 		requestedModel := chatRequest.Model
 		traceID := newTraceID()
 		created := time.Now().Unix()
-		strategyType := s.routingService.DetermineStrategyType(chatRequest.RoutingStrategy, requestedModel)
-		if strings.TrimSpace(chatRequest.PluginKey) != "" {
-			var pluginErr error
-			chatRequest, pluginErr = s.injectPluginContext(chatRequest, userID)
-			if pluginErr != nil {
-				log.Printf("chat stream plugin inject failed: userId=%d apiKeyId=%d plugin=%s err=%v", userID, apiKeyID, chatRequest.PluginKey, pluginErr)
-				errChan <- pluginErr
-				return
-			}
-		}
 		if userID > 0 {
 			disabled, disabledErr := s.userService.IsUserDisabled(userID)
 			if disabledErr != nil {
@@ -275,6 +307,38 @@ func (s *ChatService) ChatStream(chatRequest dto.ChatRequest, userID, apiKeyID i
 				errChan <- errno.NewWithMessage(errno.ForbiddenError, "账号已被禁用，无法使用服务")
 				return
 			}
+		}
+		strategyType := s.routingService.DetermineStrategyType(chatRequest.RoutingStrategy, requestedModel)
+		if strings.TrimSpace(chatRequest.PluginKey) != "" {
+			var pluginErr error
+			chatRequest, pluginErr = s.injectPluginContext(chatRequest, userID)
+			if pluginErr != nil {
+				log.Printf("chat stream plugin inject failed: userId=%d apiKeyId=%d plugin=%s err=%v", userID, apiKeyID, chatRequest.PluginKey, pluginErr)
+				errChan <- pluginErr
+				return
+			}
+		}
+		selectedModel, _, err := s.routingService.SelectModel(strategyType, constant.ModelTypeChat, requestedModel)
+		if err != nil {
+			log.Printf("chat stream select model failed: userId=%d apiKeyId=%d strategy=%s err=%v", userID, apiKeyID, strategyType, err)
+			errChan <- errno.NewWithMessage(errno.SystemError, "选择模型失败")
+			return
+		}
+		if selectedModel == nil {
+			errChan <- errno.NewWithMessage(errno.ParamsError, "没有可用的模型")
+			return
+		}
+
+		usingByok := false
+		if userID > 0 {
+			hasByok, byokErr := s.userProviderKeyService.HasUserProviderKey(userID, selectedModel.ProviderID)
+			if byokErr != nil {
+				errChan <- byokErr
+				return
+			}
+			usingByok = hasByok
+		}
+		if userID > 0 && !usingByok {
 			quotaEnough, quotaErr := s.userService.CheckQuota(userID)
 			if quotaErr != nil {
 				errChan <- quotaErr
@@ -290,19 +354,9 @@ func (s *ChatService) ChatStream(chatRequest dto.ChatRequest, userID, apiKeyID i
 				return
 			}
 			if currentBalance <= 0 {
-				errChan <- errno.NewWithMessage(errno.OperationError, "账户余额不足，请先充值")
+				errChan <- errno.NewWithMessage(errno.OperationError, fmt.Sprintf("账户余额不足，当前余额：¥%.4f，请先充值", currentBalance))
 				return
 			}
-		}
-		selectedModel, _, err := s.routingService.SelectModel(strategyType, constant.ModelTypeChat, requestedModel)
-		if err != nil {
-			log.Printf("chat stream select model failed: userId=%d apiKeyId=%d strategy=%s err=%v", userID, apiKeyID, strategyType, err)
-			errChan <- errno.NewWithMessage(errno.SystemError, "选择模型失败")
-			return
-		}
-		if selectedModel == nil {
-			errChan <- errno.NewWithMessage(errno.ParamsError, "没有可用的模型")
-			return
 		}
 
 		provider, providerErr := s.providerService.GetProviderByID(selectedModel.ProviderID)
@@ -310,6 +364,29 @@ func (s *ChatService) ChatStream(chatRequest dto.ChatRequest, userID, apiKeyID i
 			log.Printf("chat stream get provider failed: userId=%d apiKeyId=%d model=%s providerId=%d err=%v", userID, apiKeyID, selectedModel.ModelKey, selectedModel.ProviderID, providerErr)
 			errChan <- errno.NewWithMessage(errno.SystemError, "模型提供者不存在")
 			return
+		}
+		if userID > 0 {
+			userAPIKey, byokErr := s.userProviderKeyService.GetUserProviderAPIKey(userID, selectedModel.ProviderID)
+			if byokErr != nil {
+				errChan <- byokErr
+				return
+			}
+			if strings.TrimSpace(userAPIKey) != "" {
+				provider = &entity.ModelProvider{
+					ID:           provider.ID,
+					ProviderName: provider.ProviderName,
+					DisplayName:  provider.DisplayName,
+					BaseURL:      provider.BaseURL,
+					APIKey:       userAPIKey,
+					Status:       provider.Status,
+					HealthStatus: provider.HealthStatus,
+					AvgLatency:   provider.AvgLatency,
+					SuccessRate:  provider.SuccessRate,
+					Priority:     provider.Priority,
+					Config:       provider.Config,
+				}
+				usingByok = true
+			}
 		}
 
 		resp, err := s.modelInvokeService.InvokeStream(selectedModel, provider, withModel(chatRequest, selectedModel.ModelKey))
@@ -467,7 +544,7 @@ func (s *ChatService) ChatStream(chatRequest dto.ChatRequest, userID, apiKeyID i
 			ClientIP:         clientIP,
 			UserAgent:        userAgent,
 		})
-		if userID > 0 {
+		if userID > 0 && !usingByok {
 			cost := calculateCost(selectedModel.InputPrice, selectedModel.OutputPrice, promptTokens, completionTokens)
 			if cost > 0 {
 				description := "网页调用消费（流式） - " + selectedModel.ModelKey
@@ -476,6 +553,8 @@ func (s *ChatService) ChatStream(chatRequest dto.ChatRequest, userID, apiKeyID i
 				}
 				if deductErr := s.balanceService.DeductBalance(userID, cost, nil, description); deductErr != nil {
 					log.Printf("chat stream deduct balance failed: userId=%d apiKeyId=%d model=%s cost=%.6f err=%v", userID, apiKeyID, selectedModel.ModelKey, cost, deductErr)
+					errChan <- deductErr
+					return
 				}
 			}
 			if totalTokens > 0 {
