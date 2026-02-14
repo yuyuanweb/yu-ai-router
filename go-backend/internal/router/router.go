@@ -20,6 +20,8 @@ func New(
 	healthController *controller.HealthController,
 	userController *controller.UserController,
 	apiKeyController *controller.ApiKeyController,
+	providerController *controller.ProviderController,
+	modelController *controller.ModelController,
 	chatController *controller.ChatController,
 	internalChatController *controller.InternalChatController,
 	statsController *controller.StatsController,
@@ -72,6 +74,26 @@ func New(
 		apiKeyGroup.POST("/create", apiKeyController.CreateApiKey)
 		apiKeyGroup.GET("/list/my", apiKeyController.ListMyApiKeys)
 		apiKeyGroup.POST("/revoke", apiKeyController.RevokeApiKey)
+
+		providerGroup := apiGroup.Group("/provider")
+		providerGroup.POST("/add", middleware.RequireAdmin(userService), providerController.AddProvider)
+		providerGroup.POST("/delete", middleware.RequireAdmin(userService), providerController.DeleteProvider)
+		providerGroup.POST("/update", middleware.RequireAdmin(userService), providerController.UpdateProvider)
+		providerGroup.GET("/get/vo", providerController.GetProviderVOByID)
+		providerGroup.POST("/list/page/vo", providerController.ListProviderVOByPage)
+		providerGroup.GET("/list/vo", providerController.ListProviderVO)
+		providerGroup.GET("/list/healthy", providerController.ListHealthyProviders)
+
+		modelGroup := apiGroup.Group("/model")
+		modelGroup.POST("/add", middleware.RequireAdmin(userService), modelController.AddModel)
+		modelGroup.POST("/delete", middleware.RequireAdmin(userService), modelController.DeleteModel)
+		modelGroup.POST("/update", middleware.RequireAdmin(userService), modelController.UpdateModel)
+		modelGroup.GET("/get/vo", modelController.GetModelVOByID)
+		modelGroup.POST("/list/page/vo", modelController.ListModelVOByPage)
+		modelGroup.GET("/list/vo", modelController.ListModelVO)
+		modelGroup.GET("/list/active", modelController.ListActiveModels)
+		modelGroup.GET("/list/active/provider/:providerId", modelController.ListActiveModelsByProvider)
+		modelGroup.GET("/list/active/type/:modelType", modelController.ListActiveModelsByType)
 
 		statsGroup := apiGroup.Group("/stats")
 		statsGroup.Use(middleware.RequireLogin(userService))

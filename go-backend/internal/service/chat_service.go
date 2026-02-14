@@ -2,73 +2,104 @@ package service
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/json"
 	"io"
 	"log"
-	"net/http"
 	"strings"
 	"time"
 
-	"github.com/yupi/airouter/go-backend/internal/config"
+	"github.com/yupi/airouter/go-backend/internal/constant"
 	"github.com/yupi/airouter/go-backend/internal/errno"
 	"github.com/yupi/airouter/go-backend/internal/model/dto"
+	"github.com/yupi/airouter/go-backend/internal/model/entity"
 )
 
 const (
-	httpTimeoutSeconds = 60
-	chatPath           = "/v1/chat/completions"
+	maxFallbackRetries = 3
 )
 
 type ChatService struct {
-	cfg               *config.Config
 	requestLogService *RequestLogService
-	httpClient        *http.Client
+	routingService    *RoutingService
+	modelInvokeService *ModelInvokeService
+	providerService   *ProviderService
 }
 
-func NewChatService(cfg *config.Config, requestLogService *RequestLogService) *ChatService {
+func NewChatService(
+	requestLogService *RequestLogService,
+	routingService *RoutingService,
+	modelInvokeService *ModelInvokeService,
+	providerService *ProviderService,
+) *ChatService {
 	return &ChatService{
-		cfg:               cfg,
 		requestLogService: requestLogService,
-		httpClient: &http.Client{
-			Timeout: httpTimeoutSeconds * time.Second,
-		},
+		routingService:    routingService,
+		modelInvokeService: modelInvokeService,
+		providerService:   providerService,
 	}
 }
 
 func (s *ChatService) Chat(chatRequest dto.ChatRequest, userID, apiKeyID int64) (*dto.ChatResponse, error) {
 	start := time.Now()
-	modelName := s.ensureModel(chatRequest.Model)
+	requestedModel := chatRequest.Model
+	strategyType := s.routingService.DetermineStrategyType(chatRequest.RoutingStrategy, requestedModel)
 
-	payload := buildChatPayload(chatRequest, modelName, false)
-	body, err := s.callUpstream(payload)
+	selectedModel, fallbackModels, err := s.routingService.SelectModel(strategyType, constant.ModelTypeChat, requestedModel)
 	if err != nil {
-		log.Printf("chat call upstream failed: userId=%d apiKeyId=%d model=%s err=%v", userID, apiKeyID, modelName, err)
-		s.requestLogService.LogRequestAsync(ptrInt64(userID), ptrInt64(apiKeyID), modelName, 0, 0, 0, int(time.Since(start).Milliseconds()), "failed", err.Error())
-		return nil, errno.NewWithMessage(errno.SystemError, "调用模型失败: "+err.Error())
+		log.Printf("chat select model failed: userId=%d apiKeyId=%d strategy=%s err=%v", userID, apiKeyID, strategyType, err)
+		return nil, errno.NewWithMessage(errno.SystemError, "选择模型失败")
+	}
+	if selectedModel == nil {
+		return nil, errno.NewWithMessage(errno.ParamsError, "没有可用的模型")
 	}
 
-	var upstreamResp upstreamChatResponse
-	if err = json.Unmarshal(body, &upstreamResp); err != nil {
-		log.Printf("chat unmarshal upstream response failed: userId=%d apiKeyId=%d model=%s body=%s err=%v", userID, apiKeyID, modelName, trimForLog(string(body)), err)
-		s.requestLogService.LogRequestAsync(ptrInt64(userID), ptrInt64(apiKeyID), modelName, 0, 0, 0, int(time.Since(start).Milliseconds()), "failed", err.Error())
-		return nil, errno.NewWithMessage(errno.SystemError, "调用模型失败: "+err.Error())
+	candidates := append([]entity.Model{*selectedModel}, fallbackModels...)
+	if len(candidates) > maxFallbackRetries+1 {
+		candidates = candidates[:maxFallbackRetries+1]
+	}
+	var lastErr error
+	for idx, model := range candidates {
+		provider, providerErr := s.providerService.GetProviderByID(model.ProviderID)
+		if providerErr != nil {
+			lastErr = providerErr
+			log.Printf("chat get provider failed: userId=%d apiKeyId=%d model=%s providerId=%d err=%v", userID, apiKeyID, model.ModelKey, model.ProviderID, providerErr)
+			continue
+		}
+		body, invokeErr := s.modelInvokeService.Invoke(&model, provider, withModel(chatRequest, model.ModelKey))
+		if invokeErr != nil {
+			lastErr = invokeErr
+			log.Printf("chat invoke failed: userId=%d apiKeyId=%d model=%s strategy=%s isFallback=%t err=%v", userID, apiKeyID, model.ModelKey, strategyType, idx > 0, invokeErr)
+			continue
+		}
+
+		var upstreamResp upstreamChatResponse
+		if err = json.Unmarshal(body, &upstreamResp); err != nil {
+			lastErr = err
+			log.Printf("chat unmarshal upstream response failed: userId=%d apiKeyId=%d model=%s body=%s err=%v", userID, apiKeyID, model.ModelKey, trimForLog(string(body)), err)
+			continue
+		}
+		response := mapChatResponse(upstreamResp, model.ModelKey)
+		usage := response.Usage
+		s.requestLogService.LogRequestAsync(
+			ptrInt64(userID),
+			ptrInt64(apiKeyID),
+			model.ModelKey,
+			usage.PromptTokens,
+			usage.CompletionTokens,
+			usage.TotalTokens,
+			int(time.Since(start).Milliseconds()),
+			"success",
+			"",
+		)
+		return &response, nil
 	}
 
-	response := mapChatResponse(upstreamResp, modelName)
-	usage := response.Usage
-	s.requestLogService.LogRequestAsync(
-		ptrInt64(userID),
-		ptrInt64(apiKeyID),
-		modelName,
-		usage.PromptTokens,
-		usage.CompletionTokens,
-		usage.TotalTokens,
-		int(time.Since(start).Milliseconds()),
-		"success",
-		"",
-	)
-	return &response, nil
+	errMsg := "调用模型失败"
+	if lastErr != nil {
+		errMsg = errMsg + ": " + lastErr.Error()
+	}
+	s.requestLogService.LogRequestAsync(ptrInt64(userID), ptrInt64(apiKeyID), requestedModel, 0, 0, 0, int(time.Since(start).Milliseconds()), "failed", errMsg)
+	return nil, errno.NewWithMessage(errno.SystemError, errMsg)
 }
 
 func (s *ChatService) ChatStream(chatRequest dto.ChatRequest, userID, apiKeyID int64) (<-chan string, <-chan error) {
@@ -80,12 +111,30 @@ func (s *ChatService) ChatStream(chatRequest dto.ChatRequest, userID, apiKeyID i
 		defer close(errChan)
 
 		start := time.Now()
-		modelName := s.ensureModel(chatRequest.Model)
-		payload := buildChatPayload(chatRequest, modelName, true)
-		resp, err := s.callUpstreamStream(payload)
+		requestedModel := chatRequest.Model
+		strategyType := s.routingService.DetermineStrategyType(chatRequest.RoutingStrategy, requestedModel)
+		selectedModel, _, err := s.routingService.SelectModel(strategyType, constant.ModelTypeChat, requestedModel)
 		if err != nil {
-			log.Printf("chat stream call upstream failed: userId=%d apiKeyId=%d model=%s err=%v", userID, apiKeyID, modelName, err)
-			s.requestLogService.LogRequestAsync(ptrInt64(userID), ptrInt64(apiKeyID), modelName, 0, 0, 0, int(time.Since(start).Milliseconds()), "failed", err.Error())
+			log.Printf("chat stream select model failed: userId=%d apiKeyId=%d strategy=%s err=%v", userID, apiKeyID, strategyType, err)
+			errChan <- errno.NewWithMessage(errno.SystemError, "选择模型失败")
+			return
+		}
+		if selectedModel == nil {
+			errChan <- errno.NewWithMessage(errno.ParamsError, "没有可用的模型")
+			return
+		}
+
+		provider, providerErr := s.providerService.GetProviderByID(selectedModel.ProviderID)
+		if providerErr != nil {
+			log.Printf("chat stream get provider failed: userId=%d apiKeyId=%d model=%s providerId=%d err=%v", userID, apiKeyID, selectedModel.ModelKey, selectedModel.ProviderID, providerErr)
+			errChan <- errno.NewWithMessage(errno.SystemError, "模型提供者不存在")
+			return
+		}
+
+		resp, err := s.modelInvokeService.InvokeStream(selectedModel, provider, withModel(chatRequest, selectedModel.ModelKey))
+		if err != nil {
+			log.Printf("chat stream call upstream failed: userId=%d apiKeyId=%d model=%s err=%v", userID, apiKeyID, selectedModel.ModelKey, err)
+			s.requestLogService.LogRequestAsync(ptrInt64(userID), ptrInt64(apiKeyID), selectedModel.ModelKey, 0, 0, 0, int(time.Since(start).Milliseconds()), "failed", err.Error())
 			errChan <- errno.NewWithMessage(errno.SystemError, "流式调用模型失败: "+err.Error())
 			return
 		}
@@ -94,6 +143,10 @@ func (s *ChatService) ChatStream(chatRequest dto.ChatRequest, userID, apiKeyID i
 		promptTokens := 0
 		completionTokens := 0
 		totalTokens := 0
+		reasoningEnabled := chatRequest.EnableReasoning != nil && *chatRequest.EnableReasoning
+		thinkingStarted := false
+		thinkingEnded := false
+		hasOutput := false
 		reader := bufio.NewReader(resp.Body)
 
 		for {
@@ -102,8 +155,8 @@ func (s *ChatService) ChatStream(chatRequest dto.ChatRequest, userID, apiKeyID i
 				if readErr == io.EOF {
 					break
 				}
-				log.Printf("chat stream read failed: userId=%d apiKeyId=%d model=%s err=%v", userID, apiKeyID, modelName, readErr)
-				s.requestLogService.LogRequestAsync(ptrInt64(userID), ptrInt64(apiKeyID), modelName, 0, 0, 0, int(time.Since(start).Milliseconds()), "failed", readErr.Error())
+				log.Printf("chat stream read failed: userId=%d apiKeyId=%d model=%s err=%v", userID, apiKeyID, selectedModel.ModelKey, readErr)
+				s.requestLogService.LogRequestAsync(ptrInt64(userID), ptrInt64(apiKeyID), selectedModel.ModelKey, 0, 0, 0, int(time.Since(start).Milliseconds()), "failed", readErr.Error())
 				errChan <- errno.NewWithMessage(errno.SystemError, "流式调用模型失败: "+readErr.Error())
 				return
 			}
@@ -118,7 +171,7 @@ func (s *ChatService) ChatStream(chatRequest dto.ChatRequest, userID, apiKeyID i
 
 			var chunk upstreamStreamChunk
 			if err = json.Unmarshal([]byte(rawData), &chunk); err != nil {
-				log.Printf("chat stream chunk unmarshal failed: userId=%d apiKeyId=%d model=%s raw=%s err=%v", userID, apiKeyID, modelName, trimForLog(rawData), err)
+				log.Printf("chat stream chunk unmarshal failed: userId=%d apiKeyId=%d model=%s raw=%s err=%v", userID, apiKeyID, selectedModel.ModelKey, trimForLog(rawData), err)
 				continue
 			}
 			if chunk.Usage.PromptTokens > 0 {
@@ -133,11 +186,49 @@ func (s *ChatService) ChatStream(chatRequest dto.ChatRequest, userID, apiKeyID i
 			if len(chunk.Choices) == 0 {
 				continue
 			}
-			content := chunk.Choices[0].Delta.Content
+
+			delta := chunk.Choices[0].Delta
+			reasoningContent := strings.TrimSpace(delta.ReasoningContent)
+			if reasoningEnabled && reasoningContent != "" {
+				escapedReasoning := escapeNewlines(reasoningContent)
+				if !thinkingStarted {
+					thinkingStarted = true
+					streamChan <- "[THINKING]" + escapedReasoning + "\\n"
+				} else {
+					streamChan <- escapedReasoning + "\\n"
+				}
+				hasOutput = true
+				continue
+			}
+
+			content := delta.Content
+			if reasoningEnabled && thinkingStarted && !thinkingEnded {
+				thinkingEnded = true
+				if content != "" {
+					streamChan <- "[/THINKING]\\n" + escapeNewlines(content)
+					hasOutput = true
+					continue
+				}
+				streamChan <- "[/THINKING]"
+				hasOutput = true
+				continue
+			}
 			if content == "" {
 				continue
 			}
-			streamChan <- strings.ReplaceAll(content, "\n", "\\n")
+			streamChan <- escapeNewlines(content)
+			hasOutput = true
+		}
+
+		if reasoningEnabled && thinkingStarted && !thinkingEnded {
+			streamChan <- "[/THINKING]"
+			hasOutput = true
+		}
+		if reasoningEnabled && !thinkingStarted {
+			log.Printf("chat stream reasoning requested but no reasoning chunk returned: userId=%d apiKeyId=%d model=%s", userID, apiKeyID, selectedModel.ModelKey)
+		}
+		if !hasOutput {
+			log.Printf("chat stream finished with empty output: userId=%d apiKeyId=%d model=%s", userID, apiKeyID, selectedModel.ModelKey)
 		}
 
 		if totalTokens == 0 {
@@ -146,7 +237,7 @@ func (s *ChatService) ChatStream(chatRequest dto.ChatRequest, userID, apiKeyID i
 		s.requestLogService.LogRequestAsync(
 			ptrInt64(userID),
 			ptrInt64(apiKeyID),
-			modelName,
+			selectedModel.ModelKey,
 			promptTokens,
 			completionTokens,
 			totalTokens,
@@ -157,93 +248,6 @@ func (s *ChatService) ChatStream(chatRequest dto.ChatRequest, userID, apiKeyID i
 	}()
 
 	return streamChan, errChan
-}
-
-func (s *ChatService) callUpstream(payload map[string]any) ([]byte, error) {
-	if strings.TrimSpace(s.cfg.AIAPIKey) == "" || strings.Contains(s.cfg.AIAPIKey, "YOUR_QWEN_API_KEY") {
-		return nil, errno.NewWithMessage(errno.SystemError, "AI_API_KEY 未配置")
-	}
-	rawPayload, err := json.Marshal(payload)
-	if err != nil {
-		return nil, err
-	}
-	req, err := http.NewRequest(http.MethodPost, strings.TrimRight(s.cfg.AIBaseURL, "/")+chatPath, bytes.NewReader(rawPayload))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+s.cfg.AIAPIKey)
-
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	responseBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode >= http.StatusBadRequest {
-		log.Printf("chat upstream bad status: status=%d body=%s", resp.StatusCode, trimForLog(string(responseBody)))
-		return nil, errno.NewWithMessage(errno.SystemError, string(responseBody))
-	}
-	return responseBody, nil
-}
-
-func (s *ChatService) callUpstreamStream(payload map[string]any) (*http.Response, error) {
-	if strings.TrimSpace(s.cfg.AIAPIKey) == "" || strings.Contains(s.cfg.AIAPIKey, "YOUR_QWEN_API_KEY") {
-		return nil, errno.NewWithMessage(errno.SystemError, "AI_API_KEY 未配置")
-	}
-	rawPayload, err := json.Marshal(payload)
-	if err != nil {
-		return nil, err
-	}
-	req, err := http.NewRequest(http.MethodPost, strings.TrimRight(s.cfg.AIBaseURL, "/")+chatPath, bytes.NewReader(rawPayload))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+s.cfg.AIAPIKey)
-
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode >= http.StatusBadRequest {
-		defer resp.Body.Close()
-		responseBody, _ := io.ReadAll(resp.Body)
-		log.Printf("chat stream upstream bad status: status=%d body=%s", resp.StatusCode, trimForLog(string(responseBody)))
-		return nil, errno.NewWithMessage(errno.SystemError, string(responseBody))
-	}
-	return resp, nil
-}
-
-func (s *ChatService) ensureModel(model string) string {
-	if strings.TrimSpace(model) == "" {
-		return s.cfg.AIModel
-	}
-	return model
-}
-
-func buildChatPayload(request dto.ChatRequest, modelName string, stream bool) map[string]any {
-	payload := map[string]any{
-		"model":    modelName,
-		"messages": request.Messages,
-		"stream":   stream,
-	}
-	if request.Temperature != nil {
-		payload["temperature"] = *request.Temperature
-	}
-	if request.MaxTokens != nil {
-		payload["max_tokens"] = *request.MaxTokens
-	}
-	if stream {
-		payload["stream_options"] = map[string]any{
-			"include_usage": true,
-		}
-	}
-	return payload
 }
 
 func mapChatResponse(upstream upstreamChatResponse, defaultModel string) dto.ChatResponse {
@@ -284,6 +288,9 @@ func chooseString(value, fallback string) string {
 }
 
 func ptrInt64(v int64) *int64 {
+	if v <= 0 {
+		return nil
+	}
 	value := v
 	return &value
 }
@@ -294,6 +301,15 @@ func trimForLog(value string) string {
 		return value
 	}
 	return value[:maxLogLength] + "...(truncated)"
+}
+
+func withModel(request dto.ChatRequest, modelName string) dto.ChatRequest {
+	request.Model = modelName
+	return request
+}
+
+func escapeNewlines(text string) string {
+	return strings.ReplaceAll(text, "\n", "\\n")
 }
 
 type upstreamChatResponse struct {
@@ -319,7 +335,8 @@ type upstreamChatResponse struct {
 type upstreamStreamChunk struct {
 	Choices []struct {
 		Delta struct {
-			Content string `json:"content"`
+			Content          string `json:"content"`
+			ReasoningContent string `json:"reasoning_content"`
 		} `json:"delta"`
 	} `json:"choices"`
 	Usage struct {

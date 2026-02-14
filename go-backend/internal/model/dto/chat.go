@@ -6,9 +6,11 @@ type ChatMessage struct {
 }
 
 type ChatRequest struct {
-	Model       string        `json:"model"`
-	Messages    []ChatMessage `json:"messages"`
-	Stream      *bool         `json:"stream"`
-	Temperature *float64      `json:"temperature"`
-	MaxTokens   *int          `json:"max_tokens"`
+	Model           string        `json:"model"`
+	Messages        []ChatMessage `json:"messages"`
+	Stream          *bool         `json:"stream"`
+	Temperature     *float64      `json:"temperature"`
+	MaxTokens       *int          `json:"max_tokens"`
+	EnableReasoning *bool         `json:"enable_reasoning"`
+	RoutingStrategy string        `json:"routing_strategy"`
 }

@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"time"
+
 	"github.com/yupi/airouter/go-backend/internal/model/entity"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -56,4 +58,30 @@ func (r *RequestLogRepository) CountUserTokens(userID int64) (int64, error) {
 		return 0, err
 	}
 	return result.Total, nil
+}
+
+type ModelStatsRow struct {
+	ModelName    string  `gorm:"column:modelName"`
+	AvgLatency   int     `gorm:"column:avgLatency"`
+	SuccessRate  float64 `gorm:"column:successRate"`
+	TotalRequest int64   `gorm:"column:totalRequest"`
+}
+
+func (r *RequestLogRepository) QueryModelStatsSince(startTime time.Time) ([]ModelStatsRow, error) {
+	rows := make([]ModelStatsRow, 0)
+	err := r.db.Model(&entity.RequestLog{}).
+		Select(
+			"modelName",
+			"CAST(AVG(CASE WHEN status = 'success' THEN duration ELSE NULL END) AS SIGNED) AS avgLatency",
+			"IFNULL(SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0), 100) AS successRate",
+			"COUNT(*) AS totalRequest",
+		).
+		Where("createTime >= ?", startTime).
+		Where("modelName IS NOT NULL AND modelName <> ''").
+		Group("modelName").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	return rows, nil
 }

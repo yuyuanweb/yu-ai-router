@@ -37,44 +37,46 @@ func (c *InternalChatController) ChatCompletions(ctx *gin.Context) {
 		common.Error(ctx, errno.ParamsError.Code, "messages 不能为空")
 		return
 	}
-	apiKeyID, err := parsePositiveID(ctx.Query("apiKeyId"))
-	if err != nil {
-		log.Printf("internal chat invalid apiKeyId: raw=%s err=%v", ctx.Query("apiKeyId"), err)
-		common.Error(ctx, errno.ParamsError.Code, errno.ParamsError.Message)
-		return
-	}
-
 	loginUser, err := c.userService.GetLoginUser(ctx)
 	if err != nil {
 		writeServiceError(ctx, err)
 		return
 	}
-	apiKey, err := c.apiKeyService.GetByID(apiKeyID)
+
+	apiKeyID, apiKeyIDProvided, err := parseOptionalPositiveID(ctx.Query("apiKeyId"))
 	if err != nil {
-		writeServiceError(ctx, err)
+		log.Printf("internal chat invalid apiKeyId: raw=%s err=%v", ctx.Query("apiKeyId"), err)
+		common.Error(ctx, errno.ParamsError.Code, errno.ParamsError.Message)
 		return
 	}
-	if apiKey == nil {
-		log.Printf("internal chat api key not found: apiKeyId=%d userId=%d", apiKeyID, loginUser.ID)
-		common.Error(ctx, errno.NotFoundError.Code, "API Key 不存在")
-		return
-	}
-	if apiKey.UserID != loginUser.ID {
-		log.Printf("internal chat no auth for api key: apiKeyId=%d loginUserId=%d ownerId=%d", apiKey.ID, loginUser.ID, apiKey.UserID)
-		common.Error(ctx, errno.NoAuthError.Code, "无权使用该 API Key")
-		return
-	}
-	if apiKey.Status != "active" {
-		log.Printf("internal chat api key inactive: apiKeyId=%d status=%s", apiKey.ID, apiKey.Status)
-		common.Error(ctx, errno.ParamsError.Code, "API Key 已失效")
-		return
+	if apiKeyIDProvided {
+		apiKey, getErr := c.apiKeyService.GetByID(apiKeyID)
+		if getErr != nil {
+			writeServiceError(ctx, getErr)
+			return
+		}
+		if apiKey == nil {
+			log.Printf("internal chat api key not found: apiKeyId=%d userId=%d", apiKeyID, loginUser.ID)
+			common.Error(ctx, errno.NotFoundError.Code, "API Key 不存在")
+			return
+		}
+		if apiKey.UserID != loginUser.ID {
+			log.Printf("internal chat no auth for api key: apiKeyId=%d loginUserId=%d ownerId=%d", apiKey.ID, loginUser.ID, apiKey.UserID)
+			common.Error(ctx, errno.NoAuthError.Code, "无权使用该 API Key")
+			return
+		}
+		if apiKey.Status != "active" {
+			log.Printf("internal chat api key inactive: apiKeyId=%d status=%s", apiKey.ID, apiKey.Status)
+			common.Error(ctx, errno.ParamsError.Code, "API Key 已失效")
+			return
+		}
 	}
 
 	if request.Stream != nil && *request.Stream {
-		c.stream(ctx, request, loginUser.ID, apiKey.ID)
+		c.stream(ctx, request, loginUser.ID, apiKeyID)
 		return
 	}
-	response, err := c.chatService.Chat(request, loginUser.ID, apiKey.ID)
+	response, err := c.chatService.Chat(request, loginUser.ID, apiKeyID)
 	if err != nil {
 		writeServiceError(ctx, err)
 		return
@@ -115,4 +117,15 @@ func (c *InternalChatController) stream(ctx *gin.Context, request dto.ChatReques
 			return
 		}
 	}
+}
+
+func parseOptionalPositiveID(raw string) (int64, bool, error) {
+	if raw == "" {
+		return 0, false, nil
+	}
+	id, err := parsePositiveID(raw)
+	if err != nil {
+		return 0, false, err
+	}
+	return id, true, nil
 }
