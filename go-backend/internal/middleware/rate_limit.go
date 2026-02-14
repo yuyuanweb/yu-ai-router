@@ -46,11 +46,19 @@ func buildRateLimitKey(c *gin.Context, limitType RateLimitType) (string, bool) {
 	case RateLimitTypeAPIKey:
 		authorization := c.GetHeader("Authorization")
 		if !strings.HasPrefix(authorization, "Bearer ") {
-			return "", false
+			clientIP := strings.TrimSpace(c.ClientIP())
+			if clientIP == "" {
+				return "", false
+			}
+			return service.BuildIPRateLimitKey(clientIP), true
 		}
 		apiKey := strings.TrimSpace(strings.TrimPrefix(authorization, "Bearer "))
 		if apiKey == "" {
-			return "", false
+			clientIP := strings.TrimSpace(c.ClientIP())
+			if clientIP == "" {
+				return "", false
+			}
+			return service.BuildIPRateLimitKey(clientIP), true
 		}
 		return service.BuildAPIKeyRateLimitKey(apiKey), true
 	case RateLimitTypeIP:

@@ -27,6 +27,7 @@ type ChatService struct {
 	providerService    *ProviderService
 	userService        *UserService
 	balanceService     *BalanceService
+	chatCacheService   *ChatCacheService
 }
 
 func NewChatService(
@@ -36,6 +37,7 @@ func NewChatService(
 	providerService *ProviderService,
 	userService *UserService,
 	balanceService *BalanceService,
+	chatCacheService *ChatCacheService,
 ) *ChatService {
 	return &ChatService{
 		requestLogService:  requestLogService,
@@ -44,6 +46,7 @@ func NewChatService(
 		providerService:    providerService,
 		userService:        userService,
 		balanceService:     balanceService,
+		chatCacheService:   chatCacheService,
 	}
 }
 
@@ -52,6 +55,24 @@ func (s *ChatService) Chat(chatRequest dto.ChatRequest, userID, apiKeyID int64, 
 	requestedModel := chatRequest.Model
 	traceID := newTraceID()
 	strategyType := s.routingService.DetermineStrategyType(chatRequest.RoutingStrategy, requestedModel)
+
+	if cached, ok := s.chatCacheService.Get(chatRequest); ok && cached != nil {
+		s.requestLogService.LogRequestAsync(RequestLogInput{
+			TraceID:         traceID,
+			UserID:          ptrInt64(userID),
+			APIKeyID:        ptrInt64(apiKeyID),
+			RequestModel:    requestedModel,
+			RequestType:     "chat",
+			Source:          requestSource(apiKeyID),
+			Duration:        int(time.Since(start).Milliseconds()),
+			Status:          "success",
+			RoutingStrategy: "cache",
+			IsFallback:      false,
+			ClientIP:        clientIP,
+			UserAgent:       userAgent,
+		})
+		return cached, nil
+	}
 	if userID > 0 {
 		disabled, disabledErr := s.userService.IsUserDisabled(userID)
 		if disabledErr != nil {
@@ -59,6 +80,13 @@ func (s *ChatService) Chat(chatRequest dto.ChatRequest, userID, apiKeyID int64, 
 		}
 		if disabled {
 			return nil, errno.NewWithMessage(errno.ForbiddenError, "账号已被禁用，无法使用服务")
+		}
+		quotaEnough, quotaErr := s.userService.CheckQuota(userID)
+		if quotaErr != nil {
+			return nil, quotaErr
+		}
+		if !quotaEnough {
+			return nil, errno.NewWithMessage(errno.OperationError, "Token配额已用尽，请联系管理员增加配额")
 		}
 		currentBalance, balanceErr := s.balanceService.GetUserBalance(userID)
 		if balanceErr != nil {
@@ -171,6 +199,13 @@ func (s *ChatService) Chat(chatRequest dto.ChatRequest, userID, apiKeyID int64, 
 				return nil, deductErr
 			}
 		}
+		if userID > 0 && usage.TotalTokens > 0 {
+			if quotaErr := s.userService.DeductTokens(userID, int64(usage.TotalTokens)); quotaErr != nil {
+				log.Printf("chat deduct tokens failed: userId=%d apiKeyId=%d model=%s tokens=%d err=%v", userID, apiKeyID, model.ModelKey, usage.TotalTokens, quotaErr)
+				return nil, quotaErr
+			}
+		}
+		s.chatCacheService.Set(chatRequest, response)
 		return &response, nil
 	}
 
@@ -218,6 +253,15 @@ func (s *ChatService) ChatStream(chatRequest dto.ChatRequest, userID, apiKeyID i
 			}
 			if disabled {
 				errChan <- errno.NewWithMessage(errno.ForbiddenError, "账号已被禁用，无法使用服务")
+				return
+			}
+			quotaEnough, quotaErr := s.userService.CheckQuota(userID)
+			if quotaErr != nil {
+				errChan <- quotaErr
+				return
+			}
+			if !quotaEnough {
+				errChan <- errno.NewWithMessage(errno.OperationError, "Token配额已用尽，请联系管理员增加配额")
 				return
 			}
 			currentBalance, balanceErr := s.balanceService.GetUserBalance(userID)
@@ -412,6 +456,13 @@ func (s *ChatService) ChatStream(chatRequest dto.ChatRequest, userID, apiKeyID i
 				}
 				if deductErr := s.balanceService.DeductBalance(userID, cost, nil, description); deductErr != nil {
 					log.Printf("chat stream deduct balance failed: userId=%d apiKeyId=%d model=%s cost=%.6f err=%v", userID, apiKeyID, selectedModel.ModelKey, cost, deductErr)
+				}
+			}
+			if totalTokens > 0 {
+				if quotaErr := s.userService.DeductTokens(userID, int64(totalTokens)); quotaErr != nil {
+					log.Printf("chat stream deduct tokens failed: userId=%d apiKeyId=%d model=%s tokens=%d err=%v", userID, apiKeyID, selectedModel.ModelKey, totalTokens, quotaErr)
+					errChan <- quotaErr
+					return
 				}
 			}
 		}

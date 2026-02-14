@@ -27,6 +27,10 @@ func NewUserRepository(db *gorm.DB) *UserRepository {
 	return &UserRepository{db: db}
 }
 
+func (r *UserRepository) DB() *gorm.DB {
+	return r.db
+}
+
 func (r *UserRepository) baseQuery() *gorm.DB {
 	return r.db.Model(&entity.User{})
 }
@@ -123,6 +127,16 @@ func (r *UserRepository) UpdateBalance(userID int64, balance float64) (bool, err
 		Where("id = ?", userID).
 		Select("balance").
 		Updates(&entity.User{Balance: balance})
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected > 0, nil
+}
+
+func (r *UserRepository) AddUsedTokens(userID int64, tokens int64) (bool, error) {
+	result := r.baseQuery().
+		Where("id = ?", userID).
+		UpdateColumn("usedTokens", gorm.Expr("usedTokens + ?", tokens))
 	if result.Error != nil {
 		return false, result.Error
 	}

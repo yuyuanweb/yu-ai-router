@@ -87,6 +87,9 @@ func (s *UserService) UserLogin(userAccount, userPassword string, c *gin.Context
 	if user == nil {
 		return nil, errno.NewWithMessage(errno.ParamsError, "用户不存在或密码错误")
 	}
+	if user.UserStatus == "disabled" {
+		return nil, errno.NewWithMessage(errno.ForbiddenError, "账号已被禁用，请联系管理员")
+	}
 
 	session := sessions.Default(c)
 	session.Set(constant.UserLoginState, strconv.FormatInt(user.ID, 10))
@@ -346,6 +349,37 @@ func (s *UserService) IsUserDisabled(userID int64) (bool, error) {
 		return false, errno.New(errno.NotFoundError)
 	}
 	return user.UserStatus == "disabled", nil
+}
+
+func (s *UserService) CheckQuota(userID int64) (bool, error) {
+	if userID <= 0 {
+		return true, nil
+	}
+	user, err := s.userRepo.GetByID(userID)
+	if err != nil {
+		return false, errno.New(errno.SystemError)
+	}
+	if user == nil {
+		return false, errno.New(errno.NotFoundError)
+	}
+	if user.TokenQuota == unlimitedQuota {
+		return true, nil
+	}
+	return user.UsedTokens < user.TokenQuota, nil
+}
+
+func (s *UserService) DeductTokens(userID int64, tokens int64) error {
+	if userID <= 0 || tokens <= 0 {
+		return nil
+	}
+	ok, err := s.userRepo.AddUsedTokens(userID, tokens)
+	if err != nil {
+		return errno.New(errno.SystemError)
+	}
+	if !ok {
+		return errno.New(errno.OperationError)
+	}
+	return nil
 }
 
 func (s *UserService) GetEncryptPassword(userPassword string) string {

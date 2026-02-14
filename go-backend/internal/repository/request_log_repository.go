@@ -15,6 +15,17 @@ type RequestLogRepository struct {
 	db *gorm.DB
 }
 
+var allowedRequestLogSortFields = map[string]string{
+	"id":               "id",
+	"createTime":       "createTime",
+	"duration":         "duration",
+	"totalTokens":      "totalTokens",
+	"promptTokens":     "promptTokens",
+	"completionTokens": "completionTokens",
+	"cost":             "cost",
+	"status":           "status",
+}
+
 func NewRequestLogRepository(db *gorm.DB) *RequestLogRepository {
 	return &RequestLogRepository{db: db}
 }
@@ -173,7 +184,13 @@ func (r *RequestLogRepository) PageByQuery(req dto.RequestLogQueryRequest) (comm
 		return common.PageResponse[entity.RequestLog]{}, err
 	}
 
-	query = query.Order(clause.OrderByColumn{Column: clause.Column{Name: "createTime"}, Desc: true})
+	sortField := "createTime"
+	desc := true
+	if field, ok := allowedRequestLogSortFields[req.SortField]; ok {
+		sortField = field
+		desc = req.SortOrder != "ascend" && req.SortOrder != "asc"
+	}
+	query = query.Order(clause.OrderByColumn{Column: clause.Column{Name: sortField}, Desc: desc})
 	offset := (pageNum - 1) * pageSize
 	list := make([]entity.RequestLog, 0)
 	if err := query.Offset(int(offset)).Limit(int(pageSize)).Find(&list).Error; err != nil {

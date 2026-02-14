@@ -19,6 +19,8 @@ const (
 	defaultAIBaseURL      = "https://dashscope.aliyuncs.com/compatible-mode"
 	defaultAIModel        = "qwen-plus"
 	defaultAIAPIKey       = "YOUR_QWEN_API_KEY"
+	defaultAICacheEnabled = true
+	defaultAICacheTTLSeconds = 300
 	defaultStripeSuccessURL = "http://localhost:5173/recharge/success"
 	defaultStripeCancelURL  = "http://localhost:5173/recharge/cancel"
 )
@@ -39,6 +41,8 @@ type Config struct {
 	AIBaseURL string
 	AIAPIKey  string
 	AIModel   string
+	AICacheEnabled bool
+	AICacheTTLSeconds int
 
 	StripeAPIKey       string
 	StripeWebhookSecret string
@@ -98,6 +102,8 @@ func Load() (*Config, error) {
 		AIBaseURL:     pickString(*aiBaseURLFlag, os.Getenv("AI_BASE_URL"), defaultAIBaseURL),
 		AIAPIKey:      aiAPIKey,
 		AIModel:       pickString(*aiModelFlag, os.Getenv("AI_MODEL"), defaultAIModel),
+		AICacheEnabled: getBoolEnvOrDefault("AI_CACHE_ENABLED", defaultAICacheEnabled),
+		AICacheTTLSeconds: getIntEnvOrDefault("AI_CACHE_TTL_SECONDS", defaultAICacheTTLSeconds),
 		StripeAPIKey:  pickString(*stripeAPIKeyFlag, os.Getenv("STRIPE_API_KEY"), ""),
 		StripeWebhookSecret: pickString(*stripeWebhookSecretFlag, os.Getenv("STRIPE_WEBHOOK_SECRET"), ""),
 		StripeSuccessURL: pickString(*stripeSuccessURLFlag, os.Getenv("STRIPE_SUCCESS_URL"), defaultStripeSuccessURL),
@@ -197,4 +203,18 @@ func getIntEnvOrDefault(key string, defaultValue int) int {
 		return defaultValue
 	}
 	return parsed
+}
+
+func getBoolEnvOrDefault(key string, defaultValue bool) bool {
+	value := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
+	if value == "" {
+		return defaultValue
+	}
+	if value == "1" || value == "true" || value == "yes" || value == "y" {
+		return true
+	}
+	if value == "0" || value == "false" || value == "no" || value == "n" {
+		return false
+	}
+	return defaultValue
 }

@@ -45,6 +45,7 @@ func main() {
 	modelRepo := repository.NewModelRepository(db)
 	rechargeRecordRepo := repository.NewRechargeRecordRepository(db)
 	billingRecordRepo := repository.NewBillingRecordRepository(db)
+	imageGenerationRecordRepo := repository.NewImageGenerationRecordRepository(db)
 	redisPool := service.NewRedisPool(cfg)
 	defer redisPool.Close()
 
@@ -56,8 +57,10 @@ func main() {
 	balanceService := service.NewBalanceService(userRepo, billingRecordService)
 	rechargeService := service.NewRechargeService(rechargeRecordRepo, balanceService)
 	stripePaymentService := service.NewStripePaymentService(cfg, rechargeService)
+	chatCacheService := service.NewChatCacheService(redisPool, cfg)
 	providerService := service.NewProviderService(providerRepo)
 	modelService := service.NewModelService(modelRepo, providerRepo)
+	imageGenerationService := service.NewImageGenerationService(imageGenerationRecordRepo, modelService, providerService, userService, balanceService)
 	healthCheckService := service.NewHealthCheckService(providerRepo, modelRepo, requestLogRepo)
 	blacklistService := service.NewBlacklistService(redisPool)
 	rateLimitService := service.NewRateLimitService(redisPool)
@@ -77,7 +80,7 @@ func main() {
 		adapter.NewDefaultAdapter(),
 	)
 	modelInvokeService := service.NewModelInvokeService(adapterFactory)
-	chatService := service.NewChatService(requestLogService, routingService, modelInvokeService, providerService, userService, balanceService)
+	chatService := service.NewChatService(requestLogService, routingService, modelInvokeService, providerService, userService, balanceService, chatCacheService)
 
 	healthController := controller.NewHealthController()
 	userController := controller.NewUserController(userService, requestLogService, billingService)
@@ -91,6 +94,7 @@ func main() {
 	rechargeController := controller.NewRechargeController(rechargeService, stripePaymentService, userService, cfg)
 	stripeWebhookController := controller.NewStripeWebhookController(stripePaymentService)
 	balanceController := controller.NewBalanceController(balanceService, billingRecordService, userService)
+	imageController := controller.NewImageController(imageGenerationService, userService, apiKeyService)
 	healthCheckTask := task.NewHealthCheckTask(healthCheckService)
 
 	engine, err := router.New(
@@ -107,6 +111,7 @@ func main() {
 		rechargeController,
 		stripeWebhookController,
 		balanceController,
+		imageController,
 		userService,
 		blacklistService,
 		rateLimitService,

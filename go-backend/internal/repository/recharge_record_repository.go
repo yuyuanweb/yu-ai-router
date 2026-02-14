@@ -14,6 +14,10 @@ func NewRechargeRecordRepository(db *gorm.DB) *RechargeRecordRepository {
 	return &RechargeRecordRepository{db: db}
 }
 
+func (r *RechargeRecordRepository) DB() *gorm.DB {
+	return r.db
+}
+
 func (r *RechargeRecordRepository) Create(record *entity.RechargeRecord) error {
 	return r.db.Create(record).Error
 }

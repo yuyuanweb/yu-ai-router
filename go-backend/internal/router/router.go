@@ -18,6 +18,7 @@ const sessionPoolSize = 10
 const (
 	apiChatRateLimitPerSecond      = 60
 	internalChatRateLimitPerSecond = 30
+	imageRateLimitPerMinute        = 10
 )
 
 func New(
@@ -34,6 +35,7 @@ func New(
 	rechargeController *controller.RechargeController,
 	stripeWebhookController *controller.StripeWebhookController,
 	balanceController *controller.BalanceController,
+	imageController *controller.ImageController,
 	userService *service.UserService,
 	blacklistService *service.BlacklistService,
 	rateLimitService *service.RateLimitService,
@@ -146,6 +148,11 @@ func New(
 
 		webhookGroup := apiGroup.Group("/webhook")
 		webhookGroup.POST("/stripe", stripeWebhookController.HandleStripeWebhook)
+
+		imageGroup := apiGroup.Group("/v1/images")
+		imageGroup.Use(middleware.RateLimit(rateLimitService, middleware.RateLimitTypeIP, imageRateLimitPerMinute, time.Minute))
+		imageGroup.POST("/generations", imageController.GenerateImage)
+		imageGroup.GET("/my/records", middleware.RequireLogin(userService), imageController.GetMyRecords)
 
 		internalChatGroup := apiGroup.Group("/internal/chat")
 		internalChatGroup.Use(middleware.RequireLogin(userService))

@@ -14,6 +14,10 @@ func NewBillingRecordRepository(db *gorm.DB) *BillingRecordRepository {
 	return &BillingRecordRepository{db: db}
 }
 
+func (r *BillingRecordRepository) DB() *gorm.DB {
+	return r.db
+}
+
 func (r *BillingRecordRepository) Create(record *entity.BillingRecord) error {
 	return r.db.Create(record).Error
 }

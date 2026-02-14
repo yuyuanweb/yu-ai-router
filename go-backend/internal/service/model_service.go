@@ -139,6 +139,17 @@ func (s *ModelService) GetModelByID(id int64) (*entity.Model, error) {
 	return model, nil
 }
 
+func (s *ModelService) GetByModelKey(modelKey string) (*entity.Model, error) {
+	model, err := s.modelRepo.GetByModelKey(modelKey)
+	if err != nil {
+		return nil, errno.New(errno.SystemError)
+	}
+	if model == nil {
+		return nil, errno.New(errno.NotFoundError)
+	}
+	return model, nil
+}
+
 func (s *ModelService) ListModelVOByPage(req dto.ModelQueryRequest) (common.PageResponse[vo.ModelVO], error) {
 	pageNum := req.PageNum
 	if pageNum <= 0 {

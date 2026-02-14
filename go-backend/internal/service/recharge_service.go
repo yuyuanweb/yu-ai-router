@@ -7,6 +7,8 @@ import (
 	"github.com/yupi/airouter/go-backend/internal/errno"
 	"github.com/yupi/airouter/go-backend/internal/model/entity"
 	"github.com/yupi/airouter/go-backend/internal/repository"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type RechargeService struct {
@@ -72,28 +74,69 @@ func (s *RechargeService) ListUserRechargeRecords(userID, pageNum, pageSize int6
 }
 
 func (s *RechargeService) CompleteRecharge(recordID int64, paymentID string) (bool, error) {
-	record, err := s.repo.GetByID(recordID)
+	if paymentID != "" {
+		existed, err := s.repo.GetByPaymentID(paymentID)
+		if err != nil {
+			return false, errno.New(errno.SystemError)
+		}
+		if existed != nil && existed.Status == "success" {
+			return true, nil
+		}
+	}
+
+	err := s.repo.DB().Transaction(func(tx *gorm.DB) error {
+		var record entity.RechargeRecord
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Model(&entity.RechargeRecord{}).
+			Where("id = ?", recordID).
+			Take(&record).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return errno.New(errno.NotFoundError)
+			}
+			return errno.New(errno.SystemError)
+		}
+		if record.Status == "success" {
+			return nil
+		}
+
+		record.Status = "success"
+		record.PaymentID = paymentID
+		record.UpdateTime = time.Now()
+		if err := tx.Model(&entity.RechargeRecord{}).
+			Where("id = ?", record.ID).
+			Select("status", "paymentId", "updateTime").
+			Updates(&record).Error; err != nil {
+			return errno.New(errno.SystemError)
+		}
+
+		var user entity.User
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Model(&entity.User{}).
+			Where("id = ?", record.UserID).
+			Take(&user).Error; err != nil {
+			return errno.New(errno.SystemError)
+		}
+		newBalance := user.Balance + record.Amount
+		if err := tx.Model(&entity.User{}).
+			Where("id = ?", record.UserID).
+			Update("balance", newBalance).Error; err != nil {
+			return errno.New(errno.SystemError)
+		}
+		billingRecord := &entity.BillingRecord{
+			UserID:        record.UserID,
+			Amount:        record.Amount,
+			BalanceBefore: user.Balance,
+			BalanceAfter:  newBalance,
+			Description:   "充值：" + paymentID,
+			BillingType:   "recharge",
+			CreateTime:    time.Now(),
+		}
+		if err := tx.Create(billingRecord).Error; err != nil {
+			return errno.New(errno.SystemError)
+		}
+		return nil
+	})
 	if err != nil {
-		return false, errno.New(errno.SystemError)
-	}
-	if record == nil {
-		return false, errno.New(errno.NotFoundError)
-	}
-	// 防止重复回调重复入账
-	if record.Status == "success" {
-		return true, nil
-	}
-	record.Status = "success"
-	record.PaymentID = paymentID
-	record.UpdateTime = time.Now()
-	ok, err := s.repo.UpdateByID(record)
-	if err != nil {
-		return false, errno.New(errno.SystemError)
-	}
-	if !ok {
-		return false, errno.New(errno.OperationError)
-	}
-	if err = s.balanceService.AddBalance(record.UserID, record.Amount, "充值："+paymentID); err != nil {
 		return false, err
 	}
 	return true, nil
