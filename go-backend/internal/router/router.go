@@ -2,6 +2,7 @@ package router
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/gin-contrib/sessions"
 	redisStore "github.com/gin-contrib/sessions/redis"
@@ -14,6 +15,10 @@ import (
 )
 
 const sessionPoolSize = 10
+const (
+	apiChatRateLimitPerSecond      = 60
+	internalChatRateLimitPerSecond = 30
+)
 
 func New(
 	cfg *config.Config,
@@ -22,12 +27,16 @@ func New(
 	apiKeyController *controller.ApiKeyController,
 	providerController *controller.ProviderController,
 	modelController *controller.ModelController,
+	blacklistController *controller.BlacklistController,
 	chatController *controller.ChatController,
 	internalChatController *controller.InternalChatController,
 	statsController *controller.StatsController,
 	userService *service.UserService,
+	blacklistService *service.BlacklistService,
+	rateLimitService *service.RateLimitService,
 ) (*gin.Engine, error) {
 	engine := gin.New()
+	engine.Use(middleware.IPBlacklistFilter(blacklistService))
 	engine.Use(gin.Logger())
 	engine.Use(middleware.Recovery())
 	engine.Use(middleware.CORS())
@@ -95,6 +104,14 @@ func New(
 		modelGroup.GET("/list/active/provider/:providerId", modelController.ListActiveModelsByProvider)
 		modelGroup.GET("/list/active/type/:modelType", modelController.ListActiveModelsByType)
 
+		blacklistGroup := apiGroup.Group("/admin/blacklist")
+		blacklistGroup.Use(middleware.RequireAdmin(userService))
+		blacklistGroup.GET("/list", blacklistController.List)
+		blacklistGroup.POST("/add", blacklistController.Add)
+		blacklistGroup.POST("/remove", blacklistController.Remove)
+		blacklistGroup.GET("/check", blacklistController.Check)
+		blacklistGroup.GET("/count", blacklistController.Count)
+
 		statsGroup := apiGroup.Group("/stats")
 		statsGroup.Use(middleware.RequireLogin(userService))
 		statsGroup.GET("/my/tokens", statsController.GetMyTokenStats)
@@ -102,9 +119,11 @@ func New(
 
 		internalChatGroup := apiGroup.Group("/internal/chat")
 		internalChatGroup.Use(middleware.RequireLogin(userService))
+		internalChatGroup.Use(middleware.RateLimit(rateLimitService, middleware.RateLimitTypeIP, internalChatRateLimitPerSecond, time.Second))
 		internalChatGroup.POST("/completions", internalChatController.ChatCompletions)
 
 		chatGroup := apiGroup.Group("/v1/chat")
+		chatGroup.Use(middleware.RateLimit(rateLimitService, middleware.RateLimitTypeAPIKey, apiChatRateLimitPerSecond, time.Second))
 		chatGroup.POST("/completions", chatController.ChatCompletions)
 	}
 

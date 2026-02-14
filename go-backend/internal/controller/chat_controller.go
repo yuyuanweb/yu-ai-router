@@ -57,12 +57,14 @@ func (c *ChatController) ChatCompletions(ctx *gin.Context) {
 		writeError(ctx, errno.NoAuthError.Code, "API Key 无效或已失效")
 		return
 	}
+	clientIP := ctx.ClientIP()
+	userAgent := ctx.GetHeader("User-Agent")
 
 	if request.Stream != nil && *request.Stream {
-		c.stream(ctx, request, apiKey.UserID, apiKey.ID)
+		c.stream(ctx, request, apiKey.UserID, apiKey.ID, clientIP, userAgent)
 		return
 	}
-	response, err := c.chatService.Chat(request, apiKey.UserID, apiKey.ID)
+	response, err := c.chatService.Chat(request, apiKey.UserID, apiKey.ID, clientIP, userAgent)
 	if err != nil {
 		writeServiceError(ctx, err)
 		return
@@ -70,8 +72,8 @@ func (c *ChatController) ChatCompletions(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, response)
 }
 
-func (c *ChatController) stream(ctx *gin.Context, request dto.ChatRequest, userID, apiKeyID int64) {
-	streamChan, errChan := c.chatService.ChatStream(request, userID, apiKeyID)
+func (c *ChatController) stream(ctx *gin.Context, request dto.ChatRequest, userID, apiKeyID int64, clientIP, userAgent string) {
+	streamChan, errChan := c.chatService.ChatStream(request, userID, apiKeyID, clientIP, userAgent)
 	ctx.Header("Content-Type", "text/event-stream")
 	ctx.Header("Cache-Control", "no-cache")
 	ctx.Header("Connection", "keep-alive")

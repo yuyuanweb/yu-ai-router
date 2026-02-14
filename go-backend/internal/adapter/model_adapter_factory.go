@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"log"
 	"strings"
 
 	"github.com/yupi/airouter/go-backend/internal/errno"
@@ -27,5 +28,6 @@ func (f *ModelAdapterFactory) GetAdapter(providerName string) (ModelAdapter, err
 			return item, nil
 		}
 	}
+	log.Printf("adapter not matched, fallback to default: provider=%s", providerName)
 	return f.defaultAdapter, nil
 }

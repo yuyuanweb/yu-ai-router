@@ -19,15 +19,27 @@ func NewRequestLogRepository(db *gorm.DB) *RequestLogRepository {
 func (r *RequestLogRepository) Create(log *entity.RequestLog) error {
 	return r.db.
 		Select(
+			"traceId",
 			"userId",
 			"apiKeyId",
+			"modelId",
+			"requestModel",
 			"modelName",
+			"requestType",
+			"source",
 			"promptTokens",
 			"completionTokens",
 			"totalTokens",
 			"duration",
 			"status",
 			"errorMessage",
+			"errorCode",
+			"routingStrategy",
+			"isFallback",
+			"clientIp",
+			"userAgent",
+			"createTime",
+			"updateTime",
 		).
 		Create(log).Error
 }

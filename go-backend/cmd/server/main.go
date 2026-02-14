@@ -43,6 +43,8 @@ func main() {
 	requestLogRepo := repository.NewRequestLogRepository(db)
 	providerRepo := repository.NewProviderRepository(db)
 	modelRepo := repository.NewModelRepository(db)
+	redisPool := service.NewRedisPool(cfg)
+	defer redisPool.Close()
 
 	userService := service.NewUserService(userRepo)
 	apiKeyService := service.NewApiKeyService(apiKeyRepo)
@@ -50,6 +52,8 @@ func main() {
 	providerService := service.NewProviderService(providerRepo)
 	modelService := service.NewModelService(modelRepo, providerRepo)
 	healthCheckService := service.NewHealthCheckService(providerRepo, modelRepo, requestLogRepo)
+	blacklistService := service.NewBlacklistService(redisPool)
+	rateLimitService := service.NewRateLimitService(redisPool)
 
 	routingStrategies := []strategy.RoutingStrategy{
 		strategy.NewAutoRoutingStrategy(),
@@ -73,8 +77,9 @@ func main() {
 	apiKeyController := controller.NewApiKeyController(apiKeyService, userService)
 	providerController := controller.NewProviderController(providerService)
 	modelController := controller.NewModelController(modelService)
+	blacklistController := controller.NewBlacklistController(blacklistService)
 	chatController := controller.NewChatController(chatService, apiKeyService)
-	internalChatController := controller.NewInternalChatController(chatService, apiKeyService, userService)
+	internalChatController := controller.NewInternalChatController(chatService, userService)
 	statsController := controller.NewStatsController(requestLogService, userService)
 	healthCheckTask := task.NewHealthCheckTask(healthCheckService)
 
@@ -85,10 +90,13 @@ func main() {
 		apiKeyController,
 		providerController,
 		modelController,
+		blacklistController,
 		chatController,
 		internalChatController,
 		statsController,
 		userService,
+		blacklistService,
+		rateLimitService,
 	)
 	if err != nil {
 		log.Fatalf("build router failed: %v", err)
