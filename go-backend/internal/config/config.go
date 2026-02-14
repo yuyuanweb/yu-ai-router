@@ -19,6 +19,8 @@ const (
 	defaultAIBaseURL      = "https://dashscope.aliyuncs.com/compatible-mode"
 	defaultAIModel        = "qwen-plus"
 	defaultAIAPIKey       = "YOUR_QWEN_API_KEY"
+	defaultStripeSuccessURL = "http://localhost:5173/recharge/success"
+	defaultStripeCancelURL  = "http://localhost:5173/recharge/cancel"
 )
 
 type Config struct {
@@ -37,6 +39,11 @@ type Config struct {
 	AIBaseURL string
 	AIAPIKey  string
 	AIModel   string
+
+	StripeAPIKey       string
+	StripeWebhookSecret string
+	StripeSuccessURL   string
+	StripeCancelURL    string
 }
 
 func Load() (*Config, error) {
@@ -58,6 +65,10 @@ func Load() (*Config, error) {
 	aiBaseURLFlag := flag.String("ai-base-url", "", "ai provider base url")
 	aiAPIKeyFlag := flag.String("ai-api-key", "", "ai provider api key")
 	aiModelFlag := flag.String("ai-model", "", "default ai model")
+	stripeAPIKeyFlag := flag.String("stripe-api-key", "", "stripe api key")
+	stripeWebhookSecretFlag := flag.String("stripe-webhook-secret", "", "stripe webhook secret")
+	stripeSuccessURLFlag := flag.String("stripe-success-url", "", "stripe success callback url")
+	stripeCancelURLFlag := flag.String("stripe-cancel-url", "", "stripe cancel callback url")
 	flag.Parse()
 	if *envFlag != "" && *envFlag != envName {
 		loadEnvFiles(*envFlag, baseEnv)
@@ -87,6 +98,10 @@ func Load() (*Config, error) {
 		AIBaseURL:     pickString(*aiBaseURLFlag, os.Getenv("AI_BASE_URL"), defaultAIBaseURL),
 		AIAPIKey:      aiAPIKey,
 		AIModel:       pickString(*aiModelFlag, os.Getenv("AI_MODEL"), defaultAIModel),
+		StripeAPIKey:  pickString(*stripeAPIKeyFlag, os.Getenv("STRIPE_API_KEY"), ""),
+		StripeWebhookSecret: pickString(*stripeWebhookSecretFlag, os.Getenv("STRIPE_WEBHOOK_SECRET"), ""),
+		StripeSuccessURL: pickString(*stripeSuccessURLFlag, os.Getenv("STRIPE_SUCCESS_URL"), defaultStripeSuccessURL),
+		StripeCancelURL:  pickString(*stripeCancelURLFlag, os.Getenv("STRIPE_CANCEL_URL"), defaultStripeCancelURL),
 	}, nil
 }
 

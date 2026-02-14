@@ -25,6 +25,8 @@ type ChatService struct {
 	routingService     *RoutingService
 	modelInvokeService *ModelInvokeService
 	providerService    *ProviderService
+	userService        *UserService
+	balanceService     *BalanceService
 }
 
 func NewChatService(
@@ -32,12 +34,16 @@ func NewChatService(
 	routingService *RoutingService,
 	modelInvokeService *ModelInvokeService,
 	providerService *ProviderService,
+	userService *UserService,
+	balanceService *BalanceService,
 ) *ChatService {
 	return &ChatService{
 		requestLogService:  requestLogService,
 		routingService:     routingService,
 		modelInvokeService: modelInvokeService,
 		providerService:    providerService,
+		userService:        userService,
+		balanceService:     balanceService,
 	}
 }
 
@@ -46,6 +52,22 @@ func (s *ChatService) Chat(chatRequest dto.ChatRequest, userID, apiKeyID int64, 
 	requestedModel := chatRequest.Model
 	traceID := newTraceID()
 	strategyType := s.routingService.DetermineStrategyType(chatRequest.RoutingStrategy, requestedModel)
+	if userID > 0 {
+		disabled, disabledErr := s.userService.IsUserDisabled(userID)
+		if disabledErr != nil {
+			return nil, disabledErr
+		}
+		if disabled {
+			return nil, errno.NewWithMessage(errno.ForbiddenError, "账号已被禁用，无法使用服务")
+		}
+		currentBalance, balanceErr := s.balanceService.GetUserBalance(userID)
+		if balanceErr != nil {
+			return nil, balanceErr
+		}
+		if currentBalance <= 0 {
+			return nil, errno.NewWithMessage(errno.OperationError, "账户余额不足，请先充值")
+		}
+	}
 
 	selectedModel, fallbackModels, err := s.routingService.SelectModel(strategyType, constant.ModelTypeChat, requestedModel)
 	if err != nil {
@@ -139,6 +161,16 @@ func (s *ChatService) Chat(chatRequest dto.ChatRequest, userID, apiKeyID int64, 
 			ClientIP:         clientIP,
 			UserAgent:        userAgent,
 		})
+		if userID > 0 && cost > 0 {
+			description := "网页调用消费 - " + model.ModelKey
+			if apiKeyID > 0 {
+				description = "API调用消费 - " + model.ModelKey
+			}
+			if deductErr := s.balanceService.DeductBalance(userID, cost, nil, description); deductErr != nil {
+				log.Printf("chat deduct balance failed: userId=%d apiKeyId=%d model=%s cost=%.6f err=%v", userID, apiKeyID, model.ModelKey, cost, deductErr)
+				return nil, deductErr
+			}
+		}
 		return &response, nil
 	}
 
@@ -178,6 +210,26 @@ func (s *ChatService) ChatStream(chatRequest dto.ChatRequest, userID, apiKeyID i
 		traceID := newTraceID()
 		created := time.Now().Unix()
 		strategyType := s.routingService.DetermineStrategyType(chatRequest.RoutingStrategy, requestedModel)
+		if userID > 0 {
+			disabled, disabledErr := s.userService.IsUserDisabled(userID)
+			if disabledErr != nil {
+				errChan <- disabledErr
+				return
+			}
+			if disabled {
+				errChan <- errno.NewWithMessage(errno.ForbiddenError, "账号已被禁用，无法使用服务")
+				return
+			}
+			currentBalance, balanceErr := s.balanceService.GetUserBalance(userID)
+			if balanceErr != nil {
+				errChan <- balanceErr
+				return
+			}
+			if currentBalance <= 0 {
+				errChan <- errno.NewWithMessage(errno.OperationError, "账户余额不足，请先充值")
+				return
+			}
+		}
 		selectedModel, _, err := s.routingService.SelectModel(strategyType, constant.ModelTypeChat, requestedModel)
 		if err != nil {
 			log.Printf("chat stream select model failed: userId=%d apiKeyId=%d strategy=%s err=%v", userID, apiKeyID, strategyType, err)
@@ -351,6 +403,18 @@ func (s *ChatService) ChatStream(chatRequest dto.ChatRequest, userID, apiKeyID i
 			ClientIP:         clientIP,
 			UserAgent:        userAgent,
 		})
+		if userID > 0 {
+			cost := calculateCost(selectedModel.InputPrice, selectedModel.OutputPrice, promptTokens, completionTokens)
+			if cost > 0 {
+				description := "网页调用消费（流式） - " + selectedModel.ModelKey
+				if apiKeyID > 0 {
+					description = "API调用消费（流式） - " + selectedModel.ModelKey
+				}
+				if deductErr := s.balanceService.DeductBalance(userID, cost, nil, description); deductErr != nil {
+					log.Printf("chat stream deduct balance failed: userId=%d apiKeyId=%d model=%s cost=%.6f err=%v", userID, apiKeyID, selectedModel.ModelKey, cost, deductErr)
+				}
+			}
+		}
 	}()
 
 	return streamChan, errChan

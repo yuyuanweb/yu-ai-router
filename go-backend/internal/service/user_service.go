@@ -59,6 +59,7 @@ func (s *UserService) UserRegister(userAccount, userPassword, checkPassword stri
 		UserPassword: s.GetEncryptPassword(userPassword),
 		UserName:     constant.DefaultUserName,
 		UserRole:     constant.DefaultRole,
+		UserStatus:   "active",
 	}
 	id, err := s.userRepo.Create(user)
 	if err != nil {
@@ -142,6 +143,7 @@ func (s *UserService) CreateUser(req dto.UserAddRequest) (int64, error) {
 		UserAvatar:   req.UserAvatar,
 		UserProfile:  req.UserProfile,
 		UserRole:     req.UserRole,
+		UserStatus:   "active",
 		UserPassword: s.GetEncryptPassword(constant.DefaultUserPassword),
 	}
 	id, err := s.userRepo.Create(user)
@@ -227,6 +229,7 @@ func (s *UserService) GetLoginUserVO(user *entity.User) vo.LoginUserVO {
 		UserStatus:  user.UserStatus,
 		TokenQuota:  user.TokenQuota,
 		UsedTokens:  user.UsedTokens,
+		Balance:     user.Balance,
 		CreateTime:  user.CreateTime,
 		UpdateTime:  user.UpdateTime,
 	}
@@ -243,6 +246,7 @@ func (s *UserService) GetUserVO(user *entity.User) vo.UserVO {
 		UserStatus:  user.UserStatus,
 		TokenQuota:  user.TokenQuota,
 		UsedTokens:  user.UsedTokens,
+		Balance:     user.Balance,
 		CreateTime:  user.CreateTime,
 	}
 }
@@ -331,6 +335,17 @@ func (s *UserService) GetUserVOList(users []entity.User) []vo.UserVO {
 		result = append(result, s.GetUserVO(&itemCopy))
 	}
 	return result
+}
+
+func (s *UserService) IsUserDisabled(userID int64) (bool, error) {
+	user, err := s.userRepo.GetByID(userID)
+	if err != nil {
+		return false, errno.New(errno.SystemError)
+	}
+	if user == nil {
+		return false, errno.New(errno.NotFoundError)
+	}
+	return user.UserStatus == "disabled", nil
 }
 
 func (s *UserService) GetEncryptPassword(userPassword string) string {

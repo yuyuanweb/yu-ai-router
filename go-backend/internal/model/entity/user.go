@@ -17,6 +17,7 @@ type User struct {
 	UserStatus   string    `json:"userStatus" gorm:"column:userStatus"`
 	TokenQuota   int64     `json:"tokenQuota,string" gorm:"column:tokenQuota"`
 	UsedTokens   int64     `json:"usedTokens,string" gorm:"column:usedTokens"`
+	Balance      float64   `json:"balance" gorm:"column:balance"`
 	EditTime     time.Time `json:"editTime" gorm:"column:editTime"`
 	CreateTime   time.Time `json:"createTime" gorm:"column:createTime"`
 	UpdateTime   time.Time `json:"updateTime" gorm:"column:updateTime"`

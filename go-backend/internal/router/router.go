@@ -31,6 +31,9 @@ func New(
 	chatController *controller.ChatController,
 	internalChatController *controller.InternalChatController,
 	statsController *controller.StatsController,
+	rechargeController *controller.RechargeController,
+	stripeWebhookController *controller.StripeWebhookController,
+	balanceController *controller.BalanceController,
 	userService *service.UserService,
 	blacklistService *service.BlacklistService,
 	rateLimitService *service.RateLimitService,
@@ -128,6 +131,21 @@ func New(
 		statsGroup.POST("/history/my/page", statsController.PageMyHistory)
 		statsGroup.GET("/history/detail", statsController.GetHistoryDetail)
 		statsGroup.POST("/history/page", middleware.RequireAdmin(userService), statsController.PageHistory)
+
+		rechargeGroup := apiGroup.Group("/recharge")
+		rechargeGroup.GET("/stripe/success", rechargeController.StripeSuccess)
+		rechargeGroup.GET("/stripe/cancel", rechargeController.StripeCancel)
+		rechargeGroup.Use(middleware.RequireLogin(userService))
+		rechargeGroup.POST("/stripe/create", rechargeController.CreateStripeRecharge)
+		rechargeGroup.GET("/list/my", rechargeController.GetMyRechargeRecords)
+
+		balanceGroup := apiGroup.Group("/balance")
+		balanceGroup.Use(middleware.RequireLogin(userService))
+		balanceGroup.GET("/my", balanceController.GetMyBalance)
+		balanceGroup.GET("/billing/my", balanceController.GetMyBillingRecords)
+
+		webhookGroup := apiGroup.Group("/webhook")
+		webhookGroup.POST("/stripe", stripeWebhookController.HandleStripeWebhook)
 
 		internalChatGroup := apiGroup.Group("/internal/chat")
 		internalChatGroup.Use(middleware.RequireLogin(userService))

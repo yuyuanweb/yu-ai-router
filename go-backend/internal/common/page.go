@@ -2,10 +2,10 @@ package common
 
 type PageResponse[T any] struct {
 	Records            []T   `json:"records"`
-	PageNumber         int64 `json:"pageNumber,string"`
-	PageSize           int64 `json:"pageSize,string"`
-	TotalPage          int64 `json:"totalPage,string"`
-	TotalRow           int64 `json:"totalRow,string"`
+	PageNumber         int64 `json:"pageNumber"`
+	PageSize           int64 `json:"pageSize"`
+	TotalPage          int64 `json:"totalPage"`
+	TotalRow           int64 `json:"totalRow"`
 	OptimizeCountQuery bool  `json:"optimizeCountQuery"`
 }
 

@@ -33,7 +33,7 @@ func (r *UserRepository) baseQuery() *gorm.DB {
 
 func (r *UserRepository) Create(user *entity.User) (int64, error) {
 	if err := r.db.
-		Select("userAccount", "userPassword", "userName", "userAvatar", "userProfile", "userRole").
+		Select("userAccount", "userPassword", "userName", "userAvatar", "userProfile", "userRole", "userStatus", "balance").
 		Create(user).Error; err != nil {
 		return 0, err
 	}
@@ -112,6 +112,17 @@ func (r *UserRepository) UpdateStatus(userID int64, userStatus string) (bool, er
 		Where("id = ?", userID).
 		Select("userStatus").
 		Updates(&entity.User{UserStatus: userStatus})
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected > 0, nil
+}
+
+func (r *UserRepository) UpdateBalance(userID int64, balance float64) (bool, error) {
+	result := r.baseQuery().
+		Where("id = ?", userID).
+		Select("balance").
+		Updates(&entity.User{Balance: balance})
 	if result.Error != nil {
 		return false, result.Error
 	}

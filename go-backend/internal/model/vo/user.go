@@ -12,6 +12,7 @@ type UserVO struct {
 	UserStatus  string    `json:"userStatus"`
 	TokenQuota  int64     `json:"tokenQuota,string"`
 	UsedTokens  int64     `json:"usedTokens,string"`
+	Balance     float64   `json:"balance"`
 	CreateTime  time.Time `json:"createTime"`
 }
 
@@ -25,6 +26,7 @@ type LoginUserVO struct {
 	UserStatus  string    `json:"userStatus"`
 	TokenQuota  int64     `json:"tokenQuota,string"`
 	UsedTokens  int64     `json:"usedTokens,string"`
+	Balance     float64   `json:"balance"`
 	CreateTime  time.Time `json:"createTime"`
 	UpdateTime  time.Time `json:"updateTime"`
 }
