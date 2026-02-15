@@ -15,6 +15,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.health import router as health_router
 from app.api.apikey import router as apikey_router
+from app.api.blacklist import router as blacklist_router
 from app.api.chat import router as chat_router
 from app.api.internal_chat import router as internal_chat_router
 from app.api.model import router as model_router
@@ -26,6 +27,7 @@ from app.core.config import get_settings
 from app.core.constants import ErrorCode
 from app.core.logging_config import setup_logging
 from app.exceptions.business_exception import BusinessException
+from app.middleware.ip_blacklist import IpBlacklistMiddleware
 from app.task.health_check_task import HealthCheckTask
 
 settings = get_settings()
@@ -45,6 +47,7 @@ class TraceIdMiddleware(BaseHTTPMiddleware):
 
 def create_app() -> FastAPI:
     app = FastAPI(title=settings.app_name)
+    app.add_middleware(IpBlacklistMiddleware)
     app.add_middleware(TraceIdMiddleware)
     app.add_middleware(
         CORSMiddleware,
@@ -111,6 +114,7 @@ def create_app() -> FastAPI:
     app.include_router(stats_router, prefix=settings.app_base_path)
     app.include_router(model_router, prefix=settings.app_base_path)
     app.include_router(model_provider_router, prefix=settings.app_base_path)
+    app.include_router(blacklist_router, prefix=settings.app_base_path)
 
     @app.on_event("startup")
     async def startup_health_check_task() -> None:
