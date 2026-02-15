@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     stripe_webhook_secret: str = ""
     stripe_success_url: str = "http://localhost:5173/recharge/success"
     stripe_cancel_url: str = "http://localhost:5173/recharge/cancel"
+    plugin_serpapi_api_key: str = ""
 
     @property
     def mysql_dsn(self) -> str:

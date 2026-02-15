@@ -34,6 +34,22 @@ class ChatRequest(CamelBaseModel):
         alias="routing_strategy",
         validation_alias=AliasChoices("routing_strategy", "routingStrategy"),
     )
+    plugin_key: str | None = Field(
+        default=None,
+        alias="plugin_key",
+        validation_alias=AliasChoices("plugin_key", "pluginKey"),
+    )
+    file_url: str | None = Field(
+        default=None,
+        alias="file_url",
+        validation_alias=AliasChoices("file_url", "fileUrl"),
+    )
+    file_bytes: bytes | None = Field(default=None, exclude=True)
+    file_type: str | None = Field(
+        default=None,
+        alias="file_type",
+        validation_alias=AliasChoices("file_type", "fileType"),
+    )
 
 
 class ChatChoice(CamelBaseModel):

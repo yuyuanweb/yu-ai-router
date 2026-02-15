@@ -22,7 +22,8 @@ from app.core.constants import (
 from app.exceptions.business_exception import BusinessException
 from app.models.model import Model
 from app.models.model_provider import ModelProvider
-from app.schemas.chat import ChatRequest, ChatResponse, StreamChoice, StreamDelta, StreamResponse
+from app.schemas.chat import ChatMessage, ChatRequest, ChatResponse, StreamChoice, StreamDelta, StreamResponse
+from app.schemas.plugin import PluginExecuteRequest
 from app.services.model_invoke_service import ModelInvokeService
 from app.services.model_provider_service import ModelProviderService
 from app.services.balance_service import BalanceService
@@ -32,6 +33,7 @@ from app.services.quota_service import QuotaService
 from app.services.request_log_service import RequestLogService
 from app.services.routing_service import RoutingService
 from app.services.user_service import UserService
+from app.services.plugin_service import PluginService
 
 logger = logging.getLogger("app")
 
@@ -57,6 +59,8 @@ class ChatService:
         client_ip: str | None = None,
         user_agent: str | None = None,
     ) -> ChatResponse:
+        if chat_request.plugin_key:
+            chat_request = await self._inject_plugin_context(chat_request, user_id)
         start = time.perf_counter()
         trace_id = uuid.uuid4().hex
         requested_model = chat_request.model
@@ -144,17 +148,6 @@ class ChatService:
     ) -> AsyncGenerator[str, None]:
         start = time.perf_counter()
         trace_id = uuid.uuid4().hex
-        if user_id and await self.user_service.is_user_disabled(user_id):
-            raise BusinessException(ErrorCode.FORBIDDEN_ERROR, "账号已被禁用，无法使用服务")
-        if user_id and not await self.quota_service.check_quota(user_id):
-            raise BusinessException(ErrorCode.OPERATION_ERROR, "Token配额已用尽，请联系管理员增加配额")
-        if user_id:
-            current_balance = await self.balance_service.get_user_balance(user_id)
-            if current_balance <= Decimal("0"):
-                raise BusinessException(
-                    ErrorCode.OPERATION_ERROR,
-                    f"账户余额不足，当前余额：¥{current_balance}，请先充值",
-                )
         strategy_type = self._determine_strategy_type(chat_request.routing_strategy, chat_request.model)
         requested_model = chat_request.model
         prompt_tokens = 0
@@ -162,6 +155,19 @@ class ChatService:
         created = int(time.time())
         first_chunk = True
         try:
+            if chat_request.plugin_key:
+                chat_request = await self._inject_plugin_context(chat_request, user_id)
+            if user_id and await self.user_service.is_user_disabled(user_id):
+                raise BusinessException(ErrorCode.FORBIDDEN_ERROR, "账号已被禁用，无法使用服务")
+            if user_id and not await self.quota_service.check_quota(user_id):
+                raise BusinessException(ErrorCode.OPERATION_ERROR, "Token配额已用尽，请联系管理员增加配额")
+            if user_id:
+                current_balance = await self.balance_service.get_user_balance(user_id)
+                if current_balance <= Decimal("0"):
+                    raise BusinessException(
+                        ErrorCode.OPERATION_ERROR,
+                        f"账户余额不足，当前余额：¥{current_balance}，请先充值",
+                    )
             model = await self.routing_service.select_model(strategy_type, MODEL_TYPE_CHAT, requested_model)
             if model is None:
                 raise BusinessException(ErrorCode.PARAMS_ERROR, "没有可用的模型")
@@ -392,4 +398,58 @@ class ChatService:
         if requested_model:
             return ROUTING_STRATEGY_FIXED
         return ROUTING_STRATEGY_AUTO
+
+    async def _inject_plugin_context(self, chat_request: ChatRequest, user_id: int) -> ChatRequest:
+        plugin_key = chat_request.plugin_key
+        if not plugin_key:
+            return chat_request
+        user_input = ""
+        if chat_request.messages:
+            for message in reversed(chat_request.messages):
+                if message.role == "user":
+                    user_input = message.content
+                    break
+        plugin_request = PluginExecuteRequest(
+            pluginKey=plugin_key,
+            input=user_input,
+            fileUrl=chat_request.file_url,
+            file_bytes=chat_request.file_bytes,
+            fileType=chat_request.file_type,
+        )
+        plugin_result = await PluginService(self.db).execute_plugin(plugin_request, user_id)
+        if not plugin_result.success:
+            raise BusinessException(
+                ErrorCode.OPERATION_ERROR,
+                f"插件执行失败: {plugin_result.error_message}",
+            )
+        plugin_context = self._build_plugin_context_message(plugin_key, plugin_result.content or "")
+        original_messages = chat_request.messages or []
+        chat_request.messages = [ChatMessage(role="system", content=plugin_context), *original_messages]
+        return chat_request
+
+    @staticmethod
+    def _build_plugin_context_message(plugin_key: str, content: str) -> str:
+        if plugin_key == "web_search":
+            return (
+                "以下是实时网络搜索的结果，请根据这些信息回答用户的问题：\n\n"
+                f"{content}\n\n"
+                "请基于以上搜索结果，准确、简洁地回答用户的问题。如果搜索结果中没有相关信息，请如实告知。"
+            )
+        if plugin_key == "pdf_parser":
+            return (
+                "以下是用户上传的 PDF 文档内容：\n\n"
+                f"{content}\n\n"
+                "请基于以上文档内容，回答用户的问题。如果问题与文档内容无关，请如实告知。"
+            )
+        if plugin_key == "image_recognition":
+            return (
+                "以下是用户上传图片的识别结果：\n\n"
+                f"{content}\n\n"
+                "请基于以上图片识别结果，回答用户的问题。"
+            )
+        return (
+            "以下是插件返回的额外信息：\n\n"
+            f"{content}\n\n"
+            "请基于以上信息回答用户的问题。"
+        )
 

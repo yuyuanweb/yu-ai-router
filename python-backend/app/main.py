@@ -21,6 +21,7 @@ from app.api.image import router as image_router
 from app.api.internal_chat import router as internal_chat_router
 from app.api.model import router as model_router
 from app.api.model_provider import router as model_provider_router
+from app.api.plugin import router as plugin_router
 from app.api.balance import router as balance_router
 from app.api.recharge import router as recharge_router
 from app.api.stripe_webhook import router as stripe_webhook_router
@@ -32,6 +33,8 @@ from app.core.constants import ErrorCode
 from app.core.logging_config import setup_logging
 from app.exceptions.business_exception import BusinessException
 from app.middleware.ip_blacklist import IpBlacklistMiddleware
+from app.db.session import session_maker
+from app.services.plugin_service import PluginService
 from app.task.health_check_task import HealthCheckTask
 
 settings = get_settings()
@@ -120,12 +123,15 @@ def create_app() -> FastAPI:
     app.include_router(model_router, prefix=settings.app_base_path)
     app.include_router(model_provider_router, prefix=settings.app_base_path)
     app.include_router(blacklist_router, prefix=settings.app_base_path)
+    app.include_router(plugin_router, prefix=settings.app_base_path)
     app.include_router(balance_router, prefix=settings.app_base_path)
     app.include_router(recharge_router, prefix=settings.app_base_path)
     app.include_router(stripe_webhook_router, prefix=settings.app_base_path)
 
     @app.on_event("startup")
     async def startup_health_check_task() -> None:
+        async with session_maker() as session:
+            await PluginService(session).init_plugins()
         stop_event = asyncio.Event()
         app.state.health_check_stop_event = stop_event
         app.state.health_check_runner = asyncio.create_task(HealthCheckTask().run_loop(stop_event))

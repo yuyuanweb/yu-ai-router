@@ -10,3 +10,7 @@ stripe
 greenlet
 langchain
 langchain-openai
+python-multipart
+pypdf
+PyPDF2
+pdfplumber
