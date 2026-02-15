@@ -17,6 +17,7 @@ from app.api.health import router as health_router
 from app.api.apikey import router as apikey_router
 from app.api.blacklist import router as blacklist_router
 from app.api.chat import router as chat_router
+from app.api.image import router as image_router
 from app.api.internal_chat import router as internal_chat_router
 from app.api.model import router as model_router
 from app.api.model_provider import router as model_provider_router
@@ -113,6 +114,7 @@ def create_app() -> FastAPI:
     app.include_router(user_router, prefix=settings.app_base_path)
     app.include_router(apikey_router, prefix=settings.app_base_path)
     app.include_router(chat_router, prefix=settings.app_base_path)
+    app.include_router(image_router, prefix=settings.app_base_path)
     app.include_router(internal_chat_router, prefix=settings.app_base_path)
     app.include_router(stats_router, prefix=settings.app_base_path)
     app.include_router(model_router, prefix=settings.app_base_path)
