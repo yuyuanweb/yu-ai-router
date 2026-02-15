@@ -34,6 +34,11 @@ class Settings(BaseSettings):
 
     cors_allow_origin_patterns: str = "*"
     log_level: str = "INFO"
+    ai_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode"
+    ai_api_key: str = ""
+    ai_model: str = "qwen-plus"
+    ai_chat_completions_path: str = "/v1/chat/completions"
+    ai_timeout_seconds: int = 120
 
     @property
     def mysql_dsn(self) -> str:
@@ -48,6 +53,10 @@ class Settings(BaseSettings):
     def redis_dsn(self) -> str:
         auth = f":{self.redis_password}@" if self.redis_password else ""
         return f"redis://{auth}{self.redis_host}:{self.redis_port}/{self.redis_db}"
+
+    @property
+    def ai_chat_completions_url(self) -> str:
+        return f"{self.ai_base_url.rstrip('/')}{self.ai_chat_completions_path}"
 
 
 @lru_cache

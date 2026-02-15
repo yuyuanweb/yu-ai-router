@@ -8,3 +8,5 @@ pydantic-settings
 httpx
 stripe
 greenlet
+langchain
+langchain-openai

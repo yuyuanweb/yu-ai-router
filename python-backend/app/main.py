@@ -13,6 +13,10 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.health import router as health_router
+from app.api.apikey import router as apikey_router
+from app.api.chat import router as chat_router
+from app.api.internal_chat import router as internal_chat_router
+from app.api.stats import router as stats_router
 from app.api.user import router as user_router
 from app.common.result_utils import error
 from app.core.config import get_settings
@@ -97,6 +101,10 @@ def create_app() -> FastAPI:
 
     app.include_router(health_router, prefix=settings.app_base_path)
     app.include_router(user_router, prefix=settings.app_base_path)
+    app.include_router(apikey_router, prefix=settings.app_base_path)
+    app.include_router(chat_router, prefix=settings.app_base_path)
+    app.include_router(internal_chat_router, prefix=settings.app_base_path)
+    app.include_router(stats_router, prefix=settings.app_base_path)
     return app
 
 
