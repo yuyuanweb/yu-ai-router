@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     app_host: str = "0.0.0.0"
     app_port: int = 8123
     app_base_path: str = "/api"
+    app_timezone: str = "Asia/Shanghai"
 
     mysql_host: str = "127.0.0.1"
     mysql_port: int = 3306
@@ -39,6 +40,13 @@ class Settings(BaseSettings):
     ai_model: str = "qwen-plus"
     ai_chat_completions_path: str = "/v1/chat/completions"
     ai_timeout_seconds: int = 120
+    ai_cache_enabled: bool = True
+    ai_cache_ttl: int = 3600
+
+    stripe_api_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_success_url: str = "http://localhost:5173/recharge/success"
+    stripe_cancel_url: str = "http://localhost:5173/recharge/cancel"
 
     @property
     def mysql_dsn(self) -> str:

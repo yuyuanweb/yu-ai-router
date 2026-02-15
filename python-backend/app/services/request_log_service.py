@@ -40,7 +40,7 @@ class RequestLogService:
         client_ip: str | None = None,
         user_agent: str | None = None,
         cost: Decimal | None = None,
-    ) -> None:
+    ) -> RequestLog:
         final_cost = cost
         if final_cost is None and status == REQUEST_STATUS_SUCCESS and model_id is not None:
             final_cost = await BillingService(self.db).calculate_cost(
@@ -74,8 +74,10 @@ class RequestLogService:
         )
         self.db.add(entity)
         await self.db.commit()
+        await self.db.refresh(entity)
         if status == REQUEST_STATUS_SUCCESS and api_key_id and total_tokens > 0:
             await ApiKeyService(self.db).update_usage_stats(api_key_id, total_tokens)
+        return entity
 
     async def list_user_logs(self, user_id: int, limit: int | None) -> list[RequestLog]:
         safe_limit = limit if limit and limit > 0 else DEFAULT_LOG_LIMIT

@@ -20,6 +20,9 @@ from app.api.chat import router as chat_router
 from app.api.internal_chat import router as internal_chat_router
 from app.api.model import router as model_router
 from app.api.model_provider import router as model_provider_router
+from app.api.balance import router as balance_router
+from app.api.recharge import router as recharge_router
+from app.api.stripe_webhook import router as stripe_webhook_router
 from app.api.stats import router as stats_router
 from app.api.user import router as user_router
 from app.common.result_utils import error
@@ -115,6 +118,9 @@ def create_app() -> FastAPI:
     app.include_router(model_router, prefix=settings.app_base_path)
     app.include_router(model_provider_router, prefix=settings.app_base_path)
     app.include_router(blacklist_router, prefix=settings.app_base_path)
+    app.include_router(balance_router, prefix=settings.app_base_path)
+    app.include_router(recharge_router, prefix=settings.app_base_path)
+    app.include_router(stripe_webhook_router, prefix=settings.app_base_path)
 
     @app.on_event("startup")
     async def startup_health_check_task() -> None:

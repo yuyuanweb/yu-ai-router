@@ -6,6 +6,7 @@ import logging
 import time
 import uuid
 from collections.abc import AsyncGenerator
+from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,6 +25,9 @@ from app.models.model_provider import ModelProvider
 from app.schemas.chat import ChatRequest, ChatResponse, StreamChoice, StreamDelta, StreamResponse
 from app.services.model_invoke_service import ModelInvokeService
 from app.services.model_provider_service import ModelProviderService
+from app.services.balance_service import BalanceService
+from app.services.billing_service import BillingService
+from app.services.cache_service import CacheService
 from app.services.quota_service import QuotaService
 from app.services.request_log_service import RequestLogService
 from app.services.routing_service import RoutingService
@@ -41,6 +45,9 @@ class ChatService:
         self.model_invoke_service = ModelInvokeService()
         self.quota_service = QuotaService(db)
         self.user_service = UserService(db)
+        self.balance_service = BalanceService(db)
+        self.billing_service = BillingService(db)
+        self.cache_service = CacheService()
 
     async def chat(
         self,
@@ -52,12 +59,40 @@ class ChatService:
     ) -> ChatResponse:
         start = time.perf_counter()
         trace_id = uuid.uuid4().hex
+        requested_model = chat_request.model
         if user_id and await self.user_service.is_user_disabled(user_id):
             raise BusinessException(ErrorCode.FORBIDDEN_ERROR, "账号已被禁用，无法使用服务")
         if user_id and not await self.quota_service.check_quota(user_id):
             raise BusinessException(ErrorCode.OPERATION_ERROR, "Token配额已用尽，请联系管理员增加配额")
+        if user_id:
+            current_balance = await self.balance_service.get_user_balance(user_id)
+            if current_balance <= Decimal("0"):
+                raise BusinessException(
+                    ErrorCode.OPERATION_ERROR,
+                    f"账户余额不足，当前余额：¥{current_balance}，请先充值",
+                )
+        cached_response = await self.cache_service.get_cached_response(chat_request)
+        if cached_response is not None:
+            await self.request_log_service.log_request(
+                trace_id=trace_id,
+                user_id=user_id,
+                api_key_id=api_key_id,
+                model_name=requested_model or cached_response.model,
+                request_model=requested_model or cached_response.model,
+                prompt_tokens=0,
+                completion_tokens=0,
+                total_tokens=0,
+                duration=int((time.perf_counter() - start) * 1000),
+                status=REQUEST_STATUS_SUCCESS,
+                error_message=None,
+                routing_strategy="cache",
+                is_fallback=False,
+                source="api" if api_key_id else "web",
+                client_ip=client_ip,
+                user_agent=user_agent,
+            )
+            return cached_response
         strategy_type = self._determine_strategy_type(chat_request.routing_strategy, chat_request.model)
-        requested_model = chat_request.model
         selected_model = await self.routing_service.select_model(strategy_type, MODEL_TYPE_CHAT, requested_model)
         if selected_model is None:
             raise BusinessException(ErrorCode.PARAMS_ERROR, "没有可用的模型")
@@ -113,6 +148,13 @@ class ChatService:
             raise BusinessException(ErrorCode.FORBIDDEN_ERROR, "账号已被禁用，无法使用服务")
         if user_id and not await self.quota_service.check_quota(user_id):
             raise BusinessException(ErrorCode.OPERATION_ERROR, "Token配额已用尽，请联系管理员增加配额")
+        if user_id:
+            current_balance = await self.balance_service.get_user_balance(user_id)
+            if current_balance <= Decimal("0"):
+                raise BusinessException(
+                    ErrorCode.OPERATION_ERROR,
+                    f"账户余额不足，当前余额：¥{current_balance}，请先充值",
+                )
         strategy_type = self._determine_strategy_type(chat_request.routing_strategy, chat_request.model)
         requested_model = chat_request.model
         prompt_tokens = 0
@@ -164,7 +206,7 @@ class ChatService:
                 ],
             )
             yield f"data: {finish_response.model_dump_json(by_alias=True)}\n\n"
-            await self.request_log_service.log_request(
+            request_log = await self.request_log_service.log_request(
                 trace_id=trace_id,
                 user_id=user_id,
                 api_key_id=api_key_id,
@@ -185,8 +227,16 @@ class ChatService:
             )
             if user_id and prompt_tokens + completion_tokens > 0:
                 await self.quota_service.deduct_tokens(user_id, prompt_tokens + completion_tokens)
+                cost = BillingService.calculate_cost_from_model(model, prompt_tokens, completion_tokens)
+                if cost > Decimal("0"):
+                    description = (
+                        f"API调用消费（流式） - {model.model_key}"
+                        if api_key_id
+                        else f"网页调用消费（流式） - {model.model_key}"
+                    )
+                    await self.balance_service.deduct_balance(user_id, cost, request_log.id, description)
         except Exception as exc:
-            await self.request_log_service.log_request(
+            request_log = await self.request_log_service.log_request(
                 trace_id=trace_id,
                 user_id=user_id,
                 api_key_id=api_key_id,
@@ -298,6 +348,19 @@ class ChatService:
             )
             if user_id and usage.total_tokens > 0:
                 await self.quota_service.deduct_tokens(user_id, usage.total_tokens)
+                cost = self.billing_service.calculate_cost_from_model(
+                    model,
+                    usage.prompt_tokens,
+                    usage.completion_tokens,
+                )
+                if cost > Decimal("0"):
+                    description = (
+                        f"API调用消费 - {model.model_key}"
+                        if api_key_id
+                        else f"网页调用消费 - {model.model_key}"
+                    )
+                    await self.balance_service.deduct_balance(user_id, cost, request_log.id, description)
+            await self.cache_service.cache_response(chat_request, response)
             return response
         except Exception as exc:
             await self.request_log_service.log_request(

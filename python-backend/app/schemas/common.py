@@ -4,16 +4,32 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Generic, TypeVar
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
+from app.core.config import get_settings
 from app.core.constants import DEFAULT_PAGE_NUM, DEFAULT_PAGE_SIZE
 
 T = TypeVar("T")
+_settings = get_settings()
+_app_tz = ZoneInfo(_settings.app_timezone)
+
+
+def _serialize_datetime(value: datetime) -> str:
+    if value.tzinfo is None:
+        local = value.replace(tzinfo=ZoneInfo("UTC")).astimezone(_app_tz)
+    else:
+        local = value.astimezone(_app_tz)
+    return local.replace(tzinfo=None).isoformat()
 
 
 class CamelBaseModel(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, from_attributes=True)
+    model_config = ConfigDict(
+        populate_by_name=True,
+        from_attributes=True,
+        json_encoders={datetime: _serialize_datetime},
+    )
 
 
 class BaseResponse(CamelBaseModel, Generic[T]):

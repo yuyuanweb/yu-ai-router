@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Index, String, func, text
+from decimal import Decimal
+
+from sqlalchemy import BigInteger, DateTime, Index, Numeric, String, func, text
 from sqlalchemy.dialects.mysql import TINYINT
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,6 +18,7 @@ class User(Base):
     __table_args__ = (
         Index("uk_userAccount", "userAccount", unique=True),
         Index("idx_userName", "userName"),
+        Index("idx_userStatus", "userStatus"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -51,6 +54,13 @@ class User(Base):
         nullable=False,
         default=0,
         server_default=text("0"),
+    )
+    balance: Mapped[Decimal] = mapped_column(
+        "balance",
+        Numeric(12, 4),
+        nullable=False,
+        default=Decimal("0.0000"),
+        server_default=text("0.0000"),
     )
     edit_time: Mapped[datetime] = mapped_column(
         "editTime",
