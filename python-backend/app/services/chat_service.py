@@ -34,6 +34,7 @@ from app.services.request_log_service import RequestLogService
 from app.services.routing_service import RoutingService
 from app.services.user_service import UserService
 from app.services.plugin_service import PluginService
+from app.services.user_provider_key_service import UserProviderKeyService
 
 logger = logging.getLogger("app")
 
@@ -50,6 +51,7 @@ class ChatService:
         self.balance_service = BalanceService(db)
         self.billing_service = BillingService(db)
         self.cache_service = CacheService()
+        self.user_provider_key_service = UserProviderKeyService(db)
 
     async def chat(
         self,
@@ -66,15 +68,27 @@ class ChatService:
         requested_model = chat_request.model
         if user_id and await self.user_service.is_user_disabled(user_id):
             raise BusinessException(ErrorCode.FORBIDDEN_ERROR, "账号已被禁用，无法使用服务")
-        if user_id and not await self.quota_service.check_quota(user_id):
-            raise BusinessException(ErrorCode.OPERATION_ERROR, "Token配额已用尽，请联系管理员增加配额")
+        strategy_type = self._determine_strategy_type(chat_request.routing_strategy, chat_request.model)
+        selected_model = await self.routing_service.select_model(strategy_type, MODEL_TYPE_CHAT, requested_model)
+        if selected_model is None:
+            raise BusinessException(ErrorCode.PARAMS_ERROR, "没有可用的模型")
+        will_use_byok = False
         if user_id:
-            current_balance = await self.balance_service.get_user_balance(user_id)
-            if current_balance <= Decimal("0"):
-                raise BusinessException(
-                    ErrorCode.OPERATION_ERROR,
-                    f"账户余额不足，当前余额：¥{current_balance}，请先充值",
-                )
+            will_use_byok = await self.user_provider_key_service.has_user_provider_key(
+                user_id, selected_model.provider_id
+            )
+        if not will_use_byok:
+            if user_id and not await self.quota_service.check_quota(user_id):
+                raise BusinessException(ErrorCode.OPERATION_ERROR, "Token配额已用尽，请联系管理员增加配额")
+            if user_id:
+                current_balance = await self.balance_service.get_user_balance(user_id)
+                if current_balance <= Decimal("0"):
+                    raise BusinessException(
+                        ErrorCode.OPERATION_ERROR,
+                        f"账户余额不足，当前余额：¥{current_balance}，请先充值",
+                    )
+        else:
+            logger.info("BYOK 模式：用户 %s 跳过余额和配额检查", user_id)
         cached_response = await self.cache_service.get_cached_response(chat_request)
         if cached_response is not None:
             await self.request_log_service.log_request(
@@ -96,10 +110,6 @@ class ChatService:
                 user_agent=user_agent,
             )
             return cached_response
-        strategy_type = self._determine_strategy_type(chat_request.routing_strategy, chat_request.model)
-        selected_model = await self.routing_service.select_model(strategy_type, MODEL_TYPE_CHAT, requested_model)
-        if selected_model is None:
-            raise BusinessException(ErrorCode.PARAMS_ERROR, "没有可用的模型")
         fallback_models = await self.routing_service.get_fallback_models(
             strategy_type, MODEL_TYPE_CHAT, requested_model
         )
@@ -159,21 +169,46 @@ class ChatService:
                 chat_request = await self._inject_plugin_context(chat_request, user_id)
             if user_id and await self.user_service.is_user_disabled(user_id):
                 raise BusinessException(ErrorCode.FORBIDDEN_ERROR, "账号已被禁用，无法使用服务")
-            if user_id and not await self.quota_service.check_quota(user_id):
-                raise BusinessException(ErrorCode.OPERATION_ERROR, "Token配额已用尽，请联系管理员增加配额")
-            if user_id:
-                current_balance = await self.balance_service.get_user_balance(user_id)
-                if current_balance <= Decimal("0"):
-                    raise BusinessException(
-                        ErrorCode.OPERATION_ERROR,
-                        f"账户余额不足，当前余额：¥{current_balance}，请先充值",
-                    )
             model = await self.routing_service.select_model(strategy_type, MODEL_TYPE_CHAT, requested_model)
             if model is None:
                 raise BusinessException(ErrorCode.PARAMS_ERROR, "没有可用的模型")
             provider = await self.model_provider_service.get_by_id(model.provider_id)
             if provider is None:
                 raise BusinessException(ErrorCode.PARAMS_ERROR, "模型提供者不存在")
+            is_byok = False
+            if user_id:
+                user_api_key = await self.user_provider_key_service.get_user_provider_api_key(
+                    user_id, model.provider_id
+                )
+                if user_api_key:
+                    provider = ModelProvider(
+                        id=provider.id,
+                        provider_name=provider.provider_name,
+                        display_name=provider.display_name,
+                        base_url=provider.base_url,
+                        api_key=user_api_key,
+                        status=provider.status,
+                        health_status=provider.health_status,
+                        avg_latency=provider.avg_latency,
+                        success_rate=provider.success_rate,
+                        priority=provider.priority,
+                        config=provider.config,
+                        is_delete=provider.is_delete,
+                    )
+                    is_byok = True
+                    logger.info("用户 %s 使用 BYOK 模式调用模型 %s", user_id, model.model_key)
+            if not is_byok:
+                if user_id and not await self.quota_service.check_quota(user_id):
+                    raise BusinessException(ErrorCode.OPERATION_ERROR, "Token配额已用尽，请联系管理员增加配额")
+                if user_id:
+                    current_balance = await self.balance_service.get_user_balance(user_id)
+                    if current_balance <= Decimal("0"):
+                        raise BusinessException(
+                            ErrorCode.OPERATION_ERROR,
+                            f"账户余额不足，当前余额：¥{current_balance}，请先充值",
+                        )
+            else:
+                logger.info("BYOK 模式：用户 %s 跳过余额和配额检查", user_id)
             async for chunk in self.model_invoke_service.invoke_stream_chunk(model, provider, chat_request):
                 if chunk.prompt_tokens and chunk.prompt_tokens > 0:
                     prompt_tokens = chunk.prompt_tokens
@@ -231,7 +266,7 @@ class ChatService:
                 client_ip=client_ip,
                 user_agent=user_agent,
             )
-            if user_id and prompt_tokens + completion_tokens > 0:
+            if user_id and prompt_tokens + completion_tokens > 0 and not is_byok:
                 await self.quota_service.deduct_tokens(user_id, prompt_tokens + completion_tokens)
                 cost = BillingService.calculate_cost_from_model(model, prompt_tokens, completion_tokens)
                 if cost > Decimal("0"):
@@ -241,6 +276,8 @@ class ChatService:
                         else f"网页调用消费（流式） - {model.model_key}"
                     )
                     await self.balance_service.deduct_balance(user_id, cost, request_log.id, description)
+            elif is_byok:
+                logger.info("BYOK 模式（流式）：用户 %s 使用自己的密钥，不扣减余额和配额", user_id)
         except Exception as exc:
             request_log = await self.request_log_service.log_request(
                 trace_id=trace_id,
@@ -330,6 +367,26 @@ class ChatService:
         provider = await self.model_provider_service.get_by_id(model.provider_id)
         if provider is None:
             raise BusinessException(ErrorCode.PARAMS_ERROR, "模型提供者不存在")
+        is_byok = False
+        if user_id:
+            user_api_key = await self.user_provider_key_service.get_user_provider_api_key(user_id, model.provider_id)
+            if user_api_key:
+                provider = ModelProvider(
+                    id=provider.id,
+                    provider_name=provider.provider_name,
+                    display_name=provider.display_name,
+                    base_url=provider.base_url,
+                    api_key=user_api_key,
+                    status=provider.status,
+                    health_status=provider.health_status,
+                    avg_latency=provider.avg_latency,
+                    success_rate=provider.success_rate,
+                    priority=provider.priority,
+                    config=provider.config,
+                    is_delete=provider.is_delete,
+                )
+                is_byok = True
+                logger.info("用户 %s 使用 BYOK 模式调用模型 %s", user_id, model.model_key)
         try:
             response = await self.model_invoke_service.invoke(model, provider, chat_request)
             usage = response.usage
@@ -352,7 +409,7 @@ class ChatService:
                 client_ip=client_ip,
                 user_agent=user_agent,
             )
-            if user_id and usage.total_tokens > 0:
+            if user_id and usage.total_tokens > 0 and not is_byok:
                 await self.quota_service.deduct_tokens(user_id, usage.total_tokens)
                 cost = self.billing_service.calculate_cost_from_model(
                     model,
@@ -366,6 +423,8 @@ class ChatService:
                         else f"网页调用消费 - {model.model_key}"
                     )
                     await self.balance_service.deduct_balance(user_id, cost, request_log.id, description)
+            elif is_byok:
+                logger.info("BYOK 模式：用户 %s 使用自己的密钥，不扣减余额和配额", user_id)
             await self.cache_service.cache_response(chat_request, response)
             return response
         except Exception as exc:

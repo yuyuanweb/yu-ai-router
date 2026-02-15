@@ -16,6 +16,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.api.health import router as health_router
 from app.api.apikey import router as apikey_router
 from app.api.blacklist import router as blacklist_router
+from app.api.byok import router as byok_router
 from app.api.chat import router as chat_router
 from app.api.image import router as image_router
 from app.api.internal_chat import router as internal_chat_router
@@ -123,6 +124,7 @@ def create_app() -> FastAPI:
     app.include_router(model_router, prefix=settings.app_base_path)
     app.include_router(model_provider_router, prefix=settings.app_base_path)
     app.include_router(blacklist_router, prefix=settings.app_base_path)
+    app.include_router(byok_router, prefix=settings.app_base_path)
     app.include_router(plugin_router, prefix=settings.app_base_path)
     app.include_router(balance_router, prefix=settings.app_base_path)
     app.include_router(recharge_router, prefix=settings.app_base_path)
