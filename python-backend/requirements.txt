@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+aiomysql
+redis
+python-dotenv
+pydantic-settings
+httpx
+stripe
+greenlet
