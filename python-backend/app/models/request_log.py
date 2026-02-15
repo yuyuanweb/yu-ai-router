@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Index, Integer, String, Text, func
+from decimal import Decimal
+
+from sqlalchemy import BigInteger, DateTime, Index, Integer, Numeric, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -30,6 +32,7 @@ class RequestLog(Base):
     prompt_tokens: Mapped[int] = mapped_column("promptTokens", Integer, nullable=False, default=0)
     completion_tokens: Mapped[int] = mapped_column("completionTokens", Integer, nullable=False, default=0)
     total_tokens: Mapped[int] = mapped_column("totalTokens", Integer, nullable=False, default=0)
+    cost: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False, default=Decimal("0"))
     duration: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="success")
     error_message: Mapped[str | None] = mapped_column("errorMessage", Text, nullable=True)

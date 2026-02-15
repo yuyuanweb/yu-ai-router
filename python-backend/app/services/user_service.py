@@ -13,6 +13,8 @@ from app.core.constants import (
     DEFAULT_USER_NAME,
     ErrorCode,
     MAX_PAGE_SIZE,
+    USER_STATUS_ACTIVE,
+    USER_STATUS_DISABLED,
     UserRole,
 )
 from app.core.security import encrypt_password
@@ -115,6 +117,50 @@ class UserService:
         if user is None:
             raise BusinessException(ErrorCode.NOT_FOUND_ERROR, "用户不存在")
         user.is_delete = 1
+        await self.db.commit()
+        return True
+
+    async def is_user_disabled(self, user_id: int | None) -> bool:
+        if user_id is None:
+            return False
+        user = await self.get_by_id(user_id)
+        if user is None:
+            return True
+        return user.user_status == USER_STATUS_DISABLED
+
+    async def disable_user(self, user_id: int | None) -> bool:
+        if user_id is None:
+            return False
+        user = await self.get_by_id(user_id)
+        if user is None:
+            return False
+        user.user_status = USER_STATUS_DISABLED
+        await self.db.commit()
+        return True
+
+    async def enable_user(self, user_id: int | None) -> bool:
+        if user_id is None:
+            return False
+        user = await self.get_by_id(user_id)
+        if user is None:
+            return False
+        user.user_status = USER_STATUS_ACTIVE
+        await self.db.commit()
+        return True
+
+    async def set_user_quota(self, user_id: int, token_quota: int) -> bool:
+        user = await self.get_by_id(user_id)
+        if user is None:
+            raise BusinessException(ErrorCode.NOT_FOUND_ERROR, "用户不存在")
+        user.token_quota = token_quota
+        await self.db.commit()
+        return True
+
+    async def reset_user_used_tokens(self, user_id: int) -> bool:
+        user = await self.get_by_id(user_id)
+        if user is None:
+            raise BusinessException(ErrorCode.NOT_FOUND_ERROR, "用户不存在")
+        user.used_tokens = 0
         await self.db.commit()
         return True
 

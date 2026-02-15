@@ -31,6 +31,27 @@ class User(Base):
         default="user",
         server_default=text("'user'"),
     )
+    user_status: Mapped[str] = mapped_column(
+        "userStatus",
+        String(32),
+        nullable=False,
+        default="active",
+        server_default=text("'active'"),
+    )
+    token_quota: Mapped[int] = mapped_column(
+        "tokenQuota",
+        BigInteger,
+        nullable=False,
+        default=-1,
+        server_default=text("-1"),
+    )
+    used_tokens: Mapped[int] = mapped_column(
+        "usedTokens",
+        BigInteger,
+        nullable=False,
+        default=0,
+        server_default=text("0"),
+    )
     edit_time: Mapped[datetime] = mapped_column(
         "editTime",
         DateTime,

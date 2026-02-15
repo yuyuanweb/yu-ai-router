@@ -17,7 +17,10 @@ from app.models.user import User
 from app.schemas.common import BaseResponse, DeleteRequest, PageData
 from app.schemas.user import (
     LoginUserVO,
+    QuotaUpdateRequest,
+    QuotaVO,
     UserAddRequest,
+    UserAnalysisVO,
     UserLoginRequest,
     UserQueryRequest,
     UserRawVO,
@@ -25,6 +28,9 @@ from app.schemas.user import (
     UserUpdateRequest,
     UserVO,
 )
+from app.services.billing_service import BillingService
+from app.services.quota_service import QuotaService
+from app.services.request_log_service import RequestLogService
 from app.services.user_service import UserService
 
 router = APIRouter(prefix="/user", tags=["user"])
@@ -162,3 +168,99 @@ async def list_user_vo_by_page(
         sort_order=payload.sort_order,
     )
     return success(data)
+
+
+@router.get("/quota/my", response_model=BaseResponse[QuotaVO])
+async def get_my_quota(
+    login_user: User = Depends(require_login),
+    db: AsyncSession = Depends(get_db_session),
+) -> BaseResponse[QuotaVO]:
+    remaining_quota = await QuotaService(db).get_remaining_quota(login_user.id)
+    return success(
+        QuotaVO(
+            tokenQuota=login_user.token_quota,
+            usedTokens=login_user.used_tokens or 0,
+            remainingQuota=remaining_quota,
+        )
+    )
+
+
+@router.post("/quota/set", response_model=BaseResponse[bool])
+async def set_user_quota(
+    payload: QuotaUpdateRequest,
+    db: AsyncSession = Depends(get_db_session),
+    _: User = Depends(require_role(UserRole.ADMIN)),
+) -> BaseResponse[bool]:
+    await UserService(db).set_user_quota(payload.user_id, payload.token_quota)
+    return success(True)
+
+
+@router.post("/quota/reset", response_model=BaseResponse[bool])
+async def reset_user_quota(
+    user_id: int,
+    db: AsyncSession = Depends(get_db_session),
+    _: User = Depends(require_role(UserRole.ADMIN)),
+) -> BaseResponse[bool]:
+    if user_id <= 0:
+        raise BusinessException(ErrorCode.PARAMS_ERROR, "用户ID不合法")
+    await UserService(db).reset_user_used_tokens(user_id)
+    return success(True)
+
+
+@router.post("/disable", response_model=BaseResponse[bool])
+async def disable_user(
+    user_id: int,
+    db: AsyncSession = Depends(get_db_session),
+    _: User = Depends(require_role(UserRole.ADMIN)),
+) -> BaseResponse[bool]:
+    if user_id <= 0:
+        raise BusinessException(ErrorCode.PARAMS_ERROR, "用户ID不合法")
+    ok = await UserService(db).disable_user(user_id)
+    if not ok:
+        raise BusinessException(ErrorCode.OPERATION_ERROR, "操作失败")
+    return success(True)
+
+
+@router.post("/enable", response_model=BaseResponse[bool])
+async def enable_user(
+    user_id: int,
+    db: AsyncSession = Depends(get_db_session),
+    _: User = Depends(require_role(UserRole.ADMIN)),
+) -> BaseResponse[bool]:
+    if user_id <= 0:
+        raise BusinessException(ErrorCode.PARAMS_ERROR, "用户ID不合法")
+    ok = await UserService(db).enable_user(user_id)
+    if not ok:
+        raise BusinessException(ErrorCode.OPERATION_ERROR, "操作失败")
+    return success(True)
+
+
+@router.get("/analysis", response_model=BaseResponse[UserAnalysisVO])
+async def get_user_analysis(
+    user_id: int,
+    db: AsyncSession = Depends(get_db_session),
+    _: User = Depends(require_role(UserRole.ADMIN)),
+) -> BaseResponse[UserAnalysisVO]:
+    if user_id <= 0:
+        raise BusinessException(ErrorCode.PARAMS_ERROR, "用户ID不合法")
+    user = await UserService(db).get_by_id(user_id)
+    if user is None:
+        raise BusinessException(ErrorCode.NOT_FOUND_ERROR, "用户不存在")
+
+    request_log_service = RequestLogService(db)
+    analysis = UserAnalysisVO(
+        userId=str(user_id),
+        userAccount=user.user_account,
+        userName=user.user_name,
+        userStatus=user.user_status,
+        userRole=user.user_role,
+        tokenQuota=user.token_quota,
+        usedTokens=user.used_tokens or 0,
+        remainingQuota=await QuotaService(db).get_remaining_quota(user_id),
+        totalRequests=await request_log_service.count_user_requests(user_id),
+        successRequests=await request_log_service.count_user_success_requests(user_id),
+        totalTokens=await request_log_service.count_user_tokens(user_id),
+        totalCost=await BillingService(db).get_user_total_cost(user_id),
+        todayCost=await BillingService(db).get_user_today_cost(user_id),
+    )
+    return success(analysis)

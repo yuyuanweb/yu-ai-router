@@ -24,8 +24,10 @@ from app.models.model_provider import ModelProvider
 from app.schemas.chat import ChatRequest, ChatResponse, StreamChoice, StreamDelta, StreamResponse
 from app.services.model_invoke_service import ModelInvokeService
 from app.services.model_provider_service import ModelProviderService
+from app.services.quota_service import QuotaService
 from app.services.request_log_service import RequestLogService
 from app.services.routing_service import RoutingService
+from app.services.user_service import UserService
 
 logger = logging.getLogger("app")
 
@@ -37,6 +39,8 @@ class ChatService:
         self.model_provider_service = ModelProviderService(db)
         self.request_log_service = RequestLogService(db)
         self.model_invoke_service = ModelInvokeService()
+        self.quota_service = QuotaService(db)
+        self.user_service = UserService(db)
 
     async def chat(
         self,
@@ -48,6 +52,10 @@ class ChatService:
     ) -> ChatResponse:
         start = time.perf_counter()
         trace_id = uuid.uuid4().hex
+        if user_id and await self.user_service.is_user_disabled(user_id):
+            raise BusinessException(ErrorCode.FORBIDDEN_ERROR, "账号已被禁用，无法使用服务")
+        if user_id and not await self.quota_service.check_quota(user_id):
+            raise BusinessException(ErrorCode.OPERATION_ERROR, "Token配额已用尽，请联系管理员增加配额")
         strategy_type = self._determine_strategy_type(chat_request.routing_strategy, chat_request.model)
         requested_model = chat_request.model
         selected_model = await self.routing_service.select_model(strategy_type, MODEL_TYPE_CHAT, requested_model)
@@ -101,6 +109,10 @@ class ChatService:
     ) -> AsyncGenerator[str, None]:
         start = time.perf_counter()
         trace_id = uuid.uuid4().hex
+        if user_id and await self.user_service.is_user_disabled(user_id):
+            raise BusinessException(ErrorCode.FORBIDDEN_ERROR, "账号已被禁用，无法使用服务")
+        if user_id and not await self.quota_service.check_quota(user_id):
+            raise BusinessException(ErrorCode.OPERATION_ERROR, "Token配额已用尽，请联系管理员增加配额")
         strategy_type = self._determine_strategy_type(chat_request.routing_strategy, chat_request.model)
         requested_model = chat_request.model
         prompt_tokens = 0
@@ -171,6 +183,8 @@ class ChatService:
                 client_ip=client_ip,
                 user_agent=user_agent,
             )
+            if user_id and prompt_tokens + completion_tokens > 0:
+                await self.quota_service.deduct_tokens(user_id, prompt_tokens + completion_tokens)
         except Exception as exc:
             await self.request_log_service.log_request(
                 trace_id=trace_id,
@@ -282,6 +296,8 @@ class ChatService:
                 client_ip=client_ip,
                 user_agent=user_agent,
             )
+            if user_id and usage.total_tokens > 0:
+                await self.quota_service.deduct_tokens(user_id, usage.total_tokens)
             return response
         except Exception as exc:
             await self.request_log_service.log_request(
