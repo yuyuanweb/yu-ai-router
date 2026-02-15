@@ -21,7 +21,7 @@ from app.core.constants import (
 from app.exceptions.business_exception import BusinessException
 from app.models.model import Model
 from app.models.model_provider import ModelProvider
-from app.schemas.chat import ChatRequest, ChatResponse
+from app.schemas.chat import ChatRequest, ChatResponse, StreamChoice, StreamDelta, StreamResponse
 from app.services.model_invoke_service import ModelInvokeService
 from app.services.model_provider_service import ModelProviderService
 from app.services.request_log_service import RequestLogService
@@ -105,8 +105,8 @@ class ChatService:
         requested_model = chat_request.model
         prompt_tokens = 0
         completion_tokens = 0
-        thinking_started = False
-        thinking_ended = False
+        created = int(time.time())
+        first_chunk = True
         try:
             model = await self.routing_service.select_model(strategy_type, MODEL_TYPE_CHAT, requested_model)
             if model is None:
@@ -120,25 +120,38 @@ class ChatService:
                 if chunk.completion_tokens and chunk.completion_tokens > 0:
                     completion_tokens = chunk.completion_tokens
 
-                if bool(chat_request.enable_reasoning) and chunk.reasoning_content:
-                    if not thinking_started:
-                        thinking_started = True
-                        yield f"data: [THINKING]{self._escape_newlines(chunk.reasoning_content)}\n\n"
-                    elif not thinking_ended:
-                        yield f"data: {self._escape_newlines(chunk.reasoning_content)}\n\n"
+                if not chunk.text and not chunk.reasoning_content:
                     continue
 
-                if bool(chat_request.enable_reasoning) and thinking_started and not thinking_ended:
-                    thinking_ended = True
-                    if chunk.text:
-                        yield f"data: [/THINKING]\n\n"
-                        yield f"data: {self._escape_newlines(chunk.text)}\n\n"
-                    continue
+                delta = StreamDelta(
+                    role="assistant" if first_chunk else None,
+                    content=chunk.text,
+                    reasoningContent=chunk.reasoning_content,
+                )
+                first_chunk = False
+                response = StreamResponse(
+                    id=trace_id,
+                    object="chat.completion.chunk",
+                    created=created,
+                    model=model.model_key,
+                    choices=[StreamChoice(index=0, delta=delta, finishReason=None)],
+                )
+                yield f"data: {response.model_dump_json(by_alias=True)}\n\n"
 
-                if chunk.text:
-                    yield f"data: {self._escape_newlines(chunk.text)}\n\n"
-
-            yield "data: [DONE]\n\n"
+            finish_response = StreamResponse(
+                id=trace_id,
+                object="chat.completion.chunk",
+                created=created,
+                model=model.model_key,
+                choices=[
+                    StreamChoice(
+                        index=0,
+                        delta=StreamDelta(),
+                        finishReason="stop",
+                    )
+                ],
+            )
+            yield f"data: {finish_response.model_dump_json(by_alias=True)}\n\n"
             await self.request_log_service.log_request(
                 trace_id=trace_id,
                 user_id=user_id,
@@ -301,6 +314,3 @@ class ChatService:
             return ROUTING_STRATEGY_FIXED
         return ROUTING_STRATEGY_AUTO
 
-    @staticmethod
-    def _escape_newlines(text: str) -> str:
-        return text.replace("\n", "\\n") if text else ""

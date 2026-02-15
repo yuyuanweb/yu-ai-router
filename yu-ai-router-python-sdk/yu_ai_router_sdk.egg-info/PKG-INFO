@@ -1,0 +1,6 @@
+Metadata-Version: 2.4
+Name: yu-ai-router-sdk
+Version: 0.1.0
+Summary: Python SDK for Yu AI Router
+Requires-Python: >=3.10
+Requires-Dist: httpx>=0.27.0

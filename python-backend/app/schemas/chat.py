@@ -96,3 +96,23 @@ class StreamChunk(CamelBaseModel):
     prompt_tokens: int | None = Field(default=None, alias="promptTokens")
     completion_tokens: int | None = Field(default=None, alias="completionTokens")
     empty: bool = False
+
+
+class StreamDelta(CamelBaseModel):
+    role: str | None = None
+    content: str | None = None
+    reasoning_content: str | None = Field(default=None, alias="reasoningContent")
+
+
+class StreamChoice(CamelBaseModel):
+    index: int
+    delta: StreamDelta
+    finish_reason: str | None = Field(default=None, alias="finishReason")
+
+
+class StreamResponse(CamelBaseModel):
+    id: str
+    object: str = "chat.completion.chunk"
+    created: int
+    model: str
+    choices: list[StreamChoice]
