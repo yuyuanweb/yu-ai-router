@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import traceback
 import uuid
+import asyncio
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -16,6 +17,8 @@ from app.api.health import router as health_router
 from app.api.apikey import router as apikey_router
 from app.api.chat import router as chat_router
 from app.api.internal_chat import router as internal_chat_router
+from app.api.model import router as model_router
+from app.api.model_provider import router as model_provider_router
 from app.api.stats import router as stats_router
 from app.api.user import router as user_router
 from app.common.result_utils import error
@@ -23,6 +26,7 @@ from app.core.config import get_settings
 from app.core.constants import ErrorCode
 from app.core.logging_config import setup_logging
 from app.exceptions.business_exception import BusinessException
+from app.task.health_check_task import HealthCheckTask
 
 settings = get_settings()
 setup_logging(settings.log_level)
@@ -105,6 +109,23 @@ def create_app() -> FastAPI:
     app.include_router(chat_router, prefix=settings.app_base_path)
     app.include_router(internal_chat_router, prefix=settings.app_base_path)
     app.include_router(stats_router, prefix=settings.app_base_path)
+    app.include_router(model_router, prefix=settings.app_base_path)
+    app.include_router(model_provider_router, prefix=settings.app_base_path)
+
+    @app.on_event("startup")
+    async def startup_health_check_task() -> None:
+        stop_event = asyncio.Event()
+        app.state.health_check_stop_event = stop_event
+        app.state.health_check_runner = asyncio.create_task(HealthCheckTask().run_loop(stop_event))
+
+    @app.on_event("shutdown")
+    async def shutdown_health_check_task() -> None:
+        stop_event = getattr(app.state, "health_check_stop_event", None)
+        runner = getattr(app.state, "health_check_runner", None)
+        if stop_event is not None:
+            stop_event.set()
+        if runner is not None:
+            await runner
     return app
 
 

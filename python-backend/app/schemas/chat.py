@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 
 from app.schemas.common import CamelBaseModel
 
@@ -19,7 +19,21 @@ class ChatRequest(CamelBaseModel):
     messages: list[ChatMessage]
     stream: bool | None = False
     temperature: float | None = None
-    max_tokens: int | None = Field(default=None, alias="max_tokens")
+    max_tokens: int | None = Field(
+        default=None,
+        alias="max_tokens",
+        validation_alias=AliasChoices("max_tokens", "maxTokens"),
+    )
+    enable_reasoning: bool | None = Field(
+        default=None,
+        alias="enable_reasoning",
+        validation_alias=AliasChoices("enable_reasoning", "enableReasoning"),
+    )
+    routing_strategy: str | None = Field(
+        default=None,
+        alias="routing_strategy",
+        validation_alias=AliasChoices("routing_strategy", "routingStrategy"),
+    )
 
 
 class ChatChoice(CamelBaseModel):
@@ -74,3 +88,11 @@ class OpenAiStreamChunk(CamelBaseModel):
     choices: list[OpenAiChoice] = Field(default_factory=list)
     usage: OpenAiUsage | None = None
     raw: dict[str, Any] | None = None
+
+
+class StreamChunk(CamelBaseModel):
+    text: str | None = None
+    reasoning_content: str | None = Field(default=None, alias="reasoningContent")
+    prompt_tokens: int | None = Field(default=None, alias="promptTokens")
+    completion_tokens: int | None = Field(default=None, alias="completionTokens")
+    empty: bool = False

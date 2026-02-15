@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, Header, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +19,7 @@ router = APIRouter(prefix="/v1/chat", tags=["chat"])
 @router.post("/completions", response_model=ChatResponse | None)
 async def chat_completions(
     payload: ChatRequest,
+    request: Request,
     authorization: str | None = Header(default=None, alias="Authorization"),
     db: AsyncSession = Depends(get_db_session),
 ):
@@ -33,6 +34,11 @@ async def chat_completions(
     if not payload.model:
         payload.model = "qwen-plus"
     service = ChatService(db)
+    client_ip = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
     if payload.stream:
-        return StreamingResponse(service.chat_stream(payload, api_key.user_id, api_key.id), media_type="text/event-stream")
-    return await service.chat(payload, api_key.user_id, api_key.id)
+        return StreamingResponse(
+            service.chat_stream(payload, api_key.user_id, api_key.id, client_ip, user_agent),
+            media_type="text/event-stream",
+        )
+    return await service.chat(payload, api_key.user_id, api_key.id, client_ip, user_agent)
