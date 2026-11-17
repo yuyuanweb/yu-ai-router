@@ -9,7 +9,6 @@ import com.yupi.airouter.model.dto.log.RequestLogDTO;
 import com.yupi.airouter.model.dto.log.RequestLogQueryRequest;
 import com.yupi.airouter.model.entity.RequestLog;
 import com.yupi.airouter.service.ApiKeyService;
-import com.yupi.airouter.service.BillingService;
 import com.yupi.airouter.service.RequestLogService;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -39,9 +38,6 @@ public class RequestLogServiceImpl implements RequestLogService {
     @Resource
     private ApiKeyService apiKeyService;
 
-    @Resource
-    private BillingService billingService;
-
     @Override
     @Async
     public void logRequest(RequestLogDTO logDTO) {
@@ -59,7 +55,6 @@ public class RequestLogServiceImpl implements RequestLogService {
         if (cost == null && logDTO.getModelId() != null && "success".equals(logDTO.getStatus())) {
             int promptTokens = logDTO.getPromptTokens() != null ? logDTO.getPromptTokens() : 0;
             int completionTokens = logDTO.getCompletionTokens() != null ? logDTO.getCompletionTokens() : 0;
-            cost = billingService.calculateCost(logDTO.getModelId(), promptTokens, completionTokens);
         }
 
         // 创建请求日志

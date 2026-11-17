@@ -24,7 +24,6 @@ create table if not exists user
     userStatus   varchar(32)    default 'active'          not null comment '用户状态：active/disabled',
     tokenQuota   bigint         default -1                not null comment 'Token配额（-1表示无限制）',
     usedTokens   bigint         default 0                 not null comment '已使用Token数',
-    balance      decimal(12, 4) default 0.0000            not null comment '账户余额（元）',
     editTime     datetime       default CURRENT_TIMESTAMP not null comment '编辑时间',
     createTime   datetime       default CURRENT_TIMESTAMP not null comment '创建时间',
     updateTime   datetime       default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP comment '更新时间',
@@ -67,7 +66,6 @@ create table if not exists request_log
     promptTokens     int            default 0                 not null comment '输入Token数',
     completionTokens int            default 0                 not null comment '输出Token数',
     totalTokens      int            default 0                 not null comment '总Token数',
-    cost             decimal(12, 6) default 0                 not null comment '本次请求费用（元）',
     duration         int            default 0                 not null comment '请求耗时（毫秒）',
     status           varchar(32)    default 'success'         not null comment '状态：success/failed',
     errorMessage     text                                     null comment '错误信息',
@@ -139,40 +137,6 @@ create table if not exists model
     INDEX idx_healthStatus (healthStatus)
 ) comment '模型' collate = utf8mb4_unicode_ci;
 
--- 充值记录表
-create table if not exists recharge_record
-(
-    id            bigint auto_increment comment 'id' primary key,
-    userId        bigint                                not null comment '用户id',
-    amount        decimal(12, 4)                        not null comment '充值金额（元）',
-    paymentMethod varchar(32)                           not null comment '支付方式：stripe/alipay/wechat',
-    paymentId     varchar(256)                          null comment '第三方支付ID',
-    status        varchar(32) default 'pending'         not null comment '状态：pending/success/failed/refunded',
-    description   varchar(512)                          null comment '充值说明',
-    createTime    datetime    default CURRENT_TIMESTAMP not null comment '创建时间',
-    updateTime    datetime    default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP comment '更新时间',
-    INDEX idx_paymentId (paymentId),
-    INDEX idx_status (status),
-    INDEX idx_userId (userId)
-) comment '充值记录' collate = utf8mb4_unicode_ci;
-
--- 消费账单表
-create table if not exists billing_record
-(
-    id            bigint auto_increment comment 'id' primary key,
-    userId        bigint                                not null comment '用户id',
-    requestLogId  bigint                                null comment '关联的请求日志ID',
-    amount        decimal(12, 4)                        not null comment '消费金额（元）',
-    balanceBefore decimal(12, 4)                        not null comment '消费前余额（元）',
-    balanceAfter  decimal(12, 4)                        not null comment '消费后余额（元）',
-    description   varchar(512)                          null comment '消费说明',
-    billingType   varchar(32) default 'api_call'        not null comment '账单类型：api_call/recharge/refund',
-    createTime    datetime    default CURRENT_TIMESTAMP not null comment '创建时间',
-    index idx_billingType (billingType),
-    index idx_createTime (createTime),
-    index idx_requestLogId (requestLogId),
-    index idx_userId (userId)
-) comment '消费账单' collate = utf8mb4_unicode_ci;
 
 -- 图片生成记录表
 create table image_generation_record

@@ -92,12 +92,6 @@ public class User implements Serializable {
     private Long usedTokens;
 
     /**
-     * 账户余额（元）
-     */
-    @Column("balance")
-    private BigDecimal balance;
-
-    /**
      * 编辑时间
      */
     @Column("editTime")

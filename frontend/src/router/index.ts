@@ -12,8 +12,6 @@ import ApiKeyPage from '@/pages/user/ApiKeyPage.vue'
 import ProfilePage from '@/pages/user/ProfilePage.vue'
 import CallHistoryPage from '@/pages/user/CallHistoryPage.vue'
 import MyKeysPage from '@/pages/user/MyKeysPage.vue'
-import RechargeSuccessPage from '@/pages/user/RechargeSuccessPage.vue'
-import RechargeCancelPage from '@/pages/user/RechargeCancelPage.vue'
 import ImageGenerationPage from '@/pages/ImageGenerationPage.vue'
 
 const router = createRouter({
@@ -53,16 +51,6 @@ const router = createRouter({
       path: '/user/mykeys',
       name: '我的密钥',
       component: MyKeysPage,
-    },
-    {
-      path: '/recharge/success',
-      name: '充值成功',
-      component: RechargeSuccessPage,
-    },
-    {
-      path: '/recharge/cancel',
-      name: '充值取消',
-      component: RechargeCancelPage,
     },
     {
       path: '/user/login',

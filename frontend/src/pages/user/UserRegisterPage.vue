@@ -82,24 +82,38 @@ const handleSubmit = async (values: API.UserRegisterRequest) => {
 }
 </script>
 
+/* 替换原有 style */
 <style scoped>
 #userRegisterPage {
-  background: white;
-  max-width: 720px;
-  padding: 24px;
-  margin: 24px auto;
-  border-radius: 8px;
+  background: var(--bg-card); /* 奶白卡片 */
+  max-width: 480px; /* 注册页不需要太宽 */
+  padding: 40px;
+  margin: 60px auto;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft); /* 极淡的阴影 */
+  border: 1px solid var(--border-color);
 }
 
 .title {
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: 32px;
+  color: var(--text-main);
+  font-weight: 600;
 }
 
 .tips {
-  margin-bottom: 16px;
-  color: #bbb;
+  margin-bottom: 24px;
+  color: var(--text-secondary);
   font-size: 13px;
   text-align: right;
+}
+
+.tips a {
+  color: var(--color-primary);
+  transition: opacity 0.3s;
+}
+
+.tips a:hover {
+  opacity: 0.8;
 }
 </style>

@@ -1,5 +1,5 @@
 <template>
-  <div id="chatPage">
+  <div id="chatPage" class="morandi-chat-page">
     <!-- 对话内容包裹层 -->
     <div class="chat-wrapper">
       <!-- 消息列表区域（带滚动条） -->
@@ -85,13 +85,13 @@
         </div>
       </div>
 
-      <!-- 输入区域 -->
+      <!-- 输入区域 (悬浮在底部) -->
       <div class="input-container">
         <!-- 模型选择和深度思考选项 -->
         <div class="options-bar">
           <!-- 路由策略选择 -->
           <a-dropdown :trigger="['click']">
-            <a-button class="strategy-select-button" size="large">
+            <a-button class="strategy-select-button capsule-btn" size="large">
               <ThunderboltOutlined />
               <span class="strategy-label">{{ getCurrentStrategyLabel() }}</span>
               <DownOutlined class="dropdown-icon" />
@@ -116,11 +116,11 @@
           </a-dropdown>
 
           <!-- 模型选择按钮（仅固定模型策略时显示） -->
-          <a-button v-if="routingStrategy === 'fixed'" @click="showModelSelector" size="large" class="model-select-button">
+          <a-button v-if="routingStrategy === 'fixed'" @click="showModelSelector" size="large" class="model-select-button capsule-btn">
             <template v-if="selectedModel">
               <AppstoreOutlined />
               <span class="current-model">{{ selectedModel.modelName }}</span>
-              <a-tag v-if="selectedModel.supportReasoning === 1" color="purple" size="small">思考</a-tag>
+              <a-tag v-if="selectedModel.supportReasoning === 1" color="purple" size="small" class="soft-tag">思考</a-tag>
             </template>
             <template v-else>
               <AppstoreOutlined />
@@ -129,26 +129,35 @@
             <DownOutlined class="dropdown-icon" />
           </a-button>
 
-          <!-- 深度思考开关（仅固定模型策略且模型支持时显示） -->
-          <div v-if="routingStrategy === 'fixed' && selectedModel?.supportReasoning === 1" class="reasoning-switch">
-            <BulbOutlined class="reasoning-icon" />
-            <span class="reasoning-label">深度思考</span>
-            <a-switch v-model:checked="enableReasoning" />
-          </div>
+          <!-- 深度思考开关 -->
+          <a-button
+            v-if="routingStrategy === 'fixed' && selectedModel?.supportReasoning === 1"
+            :type="enableReasoning ? 'primary' : 'default'"
+            class="capsule-btn"
+            @click="enableReasoning = !enableReasoning"
+            size="large"
+          >
+            <BulbOutlined />
+            深度思考
+          </a-button>
 
           <!-- 联网搜索开关 -->
-          <div class="plugin-switch">
-            <GlobalOutlined class="plugin-icon" />
-            <span class="plugin-label">联网搜索</span>
-            <a-switch v-model:checked="enableWebSearch" />
-          </div>
+          <a-button
+            :type="enableWebSearch ? 'primary' : 'default'"
+            class="capsule-btn"
+            @click="enableWebSearch = !enableWebSearch"
+            size="large"
+          >
+            <GlobalOutlined />
+            联网搜索
+          </a-button>
 
           <!-- PDF 解析按钮 -->
           <a-button
             size="large"
             :type="selectedPluginKey === 'pdf_parser' ? 'primary' : 'default'"
             @click="togglePlugin('pdf_parser')"
-            class="plugin-button"
+            class="capsule-btn"
           >
             <FilePdfOutlined />
             PDF 解析
@@ -159,7 +168,7 @@
             size="large"
             :type="selectedPluginKey === 'image_recognition' ? 'primary' : 'default'"
             @click="togglePlugin('image_recognition')"
-            class="plugin-button"
+            class="capsule-btn"
           >
             <PictureOutlined />
             图片识别
@@ -168,7 +177,6 @@
 
         <!-- 文件信息显示（在输入框上方） -->
         <div v-if="uploadedFile" class="file-info-bar">
-          <!-- 图片预览 -->
           <div v-if="uploadedFile.type.startsWith('image/') && uploadedFilePreviewUrl" class="file-preview-container">
             <img :src="uploadedFilePreviewUrl" :alt="uploadedFile.name" class="file-preview-image" />
             <div class="file-info">
@@ -180,7 +188,6 @@
               </a-space>
             </div>
           </div>
-          <!-- PDF 文件信息 -->
           <div v-else>
             <a-space>
               <FilePdfOutlined style="font-size: 18px; color: #ff7a45" />
@@ -195,7 +202,7 @@
           <a-textarea
             v-model:value="inputMessage"
             :placeholder="getInputPlaceholder()"
-            :auto-size="{ minRows: 2, maxRows: 6 }"
+            :auto-size="{ minRows: 1, maxRows: 6 }"
             :disabled="!canSendMessage || loading"
             @pressEnter="handleEnter"
             @paste="handlePaste"
@@ -223,74 +230,33 @@
       :footer="null"
       width="900px"
       :body-style="{ maxHeight: '70vh', overflowY: 'auto' }"
+      class="morandi-modal"
     >
-      <a-tabs v-model:activeKey="activeCategory" type="card">
-        <a-tab-pane key="all" tab="全部模型">
-          <div class="model-grid">
-            <div
-              v-for="model in allModels"
-              :key="model.id"
-              class="model-card"
-              :class="{ active: selectedModel?.id === model.id }"
-              @click="selectModelAndClose(model)"
-            >
-              <div class="model-header">
-                <span class="model-name">{{ model.modelName }}</span>
-                <a-tag v-if="model.supportReasoning === 1" color="purple" size="small">思考</a-tag>
-              </div>
-              <div class="model-info">
-                <span class="model-provider">{{ model.providerDisplayName }}</span>
-                <span class="model-price">¥{{ model.inputPrice }}/¥{{ model.outputPrice }}</span>
-              </div>
-              <div class="model-desc">{{ model.description }}</div>
-            </div>
-          </div>
-        </a-tab-pane>
+      <div class="model-category-filter">
+        <div class="category-btn" :class="{ active: activeCategory === 'all' }" @click="activeCategory = 'all'">全部模型</div>
+        <div class="category-btn" :class="{ active: activeCategory === 'fast' }" @click="activeCategory = 'fast'">快速模型</div>
+        <div class="category-btn" :class="{ active: activeCategory === 'reasoning' }" @click="activeCategory = 'reasoning'">深度思考</div>
+      </div>
 
-        <a-tab-pane key="fast" tab="快速模型">
-          <div class="model-grid">
-            <div
-              v-for="model in fastModels"
-              :key="model.id"
-              class="model-card"
-              :class="{ active: selectedModel?.id === model.id }"
-              @click="selectModelAndClose(model)"
-            >
-              <div class="model-header">
-                <span class="model-name">{{ model.modelName }}</span>
-              </div>
-              <div class="model-info">
-                <span class="model-provider">{{ model.providerDisplayName }}</span>
-                <span class="model-price">¥{{ model.inputPrice }}/¥{{ model.outputPrice }}</span>
-              </div>
-              <div class="model-desc">{{ model.description }}</div>
-            </div>
+      <div class="model-grid">
+        <div
+          v-for="model in (activeCategory === 'all' ? allModels : activeCategory === 'fast' ? fastModels : reasoningModels)"
+          :key="model.id"
+          class="model-card"
+          :class="{ active: selectedModel?.id === model.id }"
+          @click="selectModelAndClose(model)"
+        >
+          <div class="model-header">
+            <span class="model-name">{{ model.modelName }}</span>
+            <a-tag v-if="model.supportReasoning === 1" color="purple" size="small" class="soft-tag">思考</a-tag>
           </div>
-        </a-tab-pane>
-
-        <a-tab-pane key="reasoning" tab="深度思考">
-          <div class="model-grid">
-            <div
-              v-for="model in reasoningModels"
-              :key="model.id"
-              class="model-card"
-              :class="{ active: selectedModel?.id === model.id }"
-              @click="selectModelAndClose(model)"
-            >
-              <div class="model-header">
-                <span class="model-name">{{ model.modelName }}</span>
-                <a-tag color="purple" size="small">思考</a-tag>
-              </div>
-              <div class="model-info">
-                <span class="model-provider">{{ model.providerDisplayName }}</span>
-                <span class="model-price">¥{{ model.inputPrice }}/¥{{ model.outputPrice }}</span>
-              </div>
-              <div class="model-desc">{{ model.description }}</div>
-            </div>
+          <div class="model-info">
+            <span class="model-provider">{{ model.providerDisplayName }}</span>
+            <span class="model-price">¥{{ model.inputPrice }}/¥{{ model.outputPrice }}</span>
           </div>
-        </a-tab-pane>
-
-      </a-tabs>
+          <div class="model-desc">{{ model.description }}</div>
+        </div>
+      </div>
     </a-modal>
   </div>
 </template>
@@ -333,11 +299,7 @@ interface Message {
   thinking?: string
   answer?: string
   thinkingExpanded?: boolean
-  file?: {
-    name: string
-    size: number
-    type: string
-  }
+  file?: { name: string; size: number; type: string }
   filePreviewUrl?: string
   pluginKey?: string
 }
@@ -365,22 +327,12 @@ const uploadedFile = ref<File | null>(null)
 const uploadedFilePreviewUrl = ref<string>('')
 
 // 计算不同类别的模型
-const fastModels = computed(() => {
-  return allModels.value.filter(m => m.supportReasoning !== 1
-  )
-})
-
-const reasoningModels = computed(() => {
-  return allModels.value.filter(m => m.supportReasoning === 1)
-})
+const fastModels = computed(() => allModels.value.filter(m => m.supportReasoning !== 1))
+const reasoningModels = computed(() => allModels.value.filter(m => m.supportReasoning === 1))
 
 // 判断是否可以发送消息
 const canSendMessage = computed(() => {
-  // 非固定模型策略时，只要有模型列表就可以发送（后端自动选择）
-  if (routingStrategy.value !== 'fixed') {
-    return allModels.value.length > 0
-  }
-  // 固定模型策略时，需要选择模型
+  if (routingStrategy.value !== 'fixed') return allModels.value.length > 0
   return selectedModel.value !== null
 })
 
@@ -390,7 +342,6 @@ const loadModels = async () => {
     const res = await listActiveModels()
     if (res.data.data) {
       allModels.value = res.data.data
-      // 默认选择第一个模型
       if (allModels.value.length > 0) {
         selectedModel.value = allModels.value[0]
       }
@@ -413,22 +364,17 @@ const loadEnabledPlugins = async () => {
   }
 }
 
-// 切换插件（PDF 解析 / 图片识别）
+// 切换插件
 const togglePlugin = (pluginKey: string) => {
   if (selectedPluginKey.value === pluginKey) {
-    // 如果已选中，则取消
     selectedPluginKey.value = ''
     clearFile()
   } else {
-    // 选中新插件（互斥，关闭联网搜索）
     enableWebSearch.value = false
     selectedPluginKey.value = pluginKey
-    // 如果已有文件，检查是否匹配
     if (uploadedFile.value) {
       const isValid = validateFileForPlugin(uploadedFile.value, pluginKey)
-      if (!isValid) {
-        clearFile()
-      }
+      if (!isValid) clearFile()
     }
   }
 }
@@ -436,7 +382,6 @@ const togglePlugin = (pluginKey: string) => {
 // 监听联网搜索开关变化
 watch(enableWebSearch, (newValue) => {
   if (newValue) {
-    // 启用联网搜索时，关闭其他插件
     selectedPluginKey.value = ''
     clearFile()
   }
@@ -446,22 +391,13 @@ watch(enableWebSearch, (newValue) => {
 const handlePaste = (e: ClipboardEvent) => {
   const items = e.clipboardData?.items
   if (!items) return
-
-  // 只有选择了 PDF 解析或图片识别才能粘贴文件
-  if (!selectedPluginKey.value || selectedPluginKey.value === 'web_search') {
-    return
-  }
-
+  if (!selectedPluginKey.value || selectedPluginKey.value === 'web_search') return
   for (let i = 0; i < items.length; i++) {
     const item = items[i]
-
-    // 检查是否是文件
     if (item.kind === 'file') {
       e.preventDefault()
       const file = item.getAsFile()
-      if (file) {
-        handleFileSelect(file)
-      }
+      if (file) handleFileSelect(file)
       break
     }
   }
@@ -469,25 +405,16 @@ const handlePaste = (e: ClipboardEvent) => {
 
 // 处理文件选择
 const handleFileSelect = (file: File) => {
-  // 验证文件
-  if (!validateFileForPlugin(file, selectedPluginKey.value)) {
-    return
-  }
-
-  // 检查文件大小（10MB）
+  if (!validateFileForPlugin(file, selectedPluginKey.value)) return
   const isLt10M = file.size / 1024 / 1024 < 10
   if (!isLt10M) {
     message.error('文件大小不能超过 10MB')
     return
   }
-
   uploadedFile.value = file
-
-  // 如果是图片，生成预览 URL
   if (file.type.startsWith('image/')) {
     uploadedFilePreviewUrl.value = URL.createObjectURL(file)
   }
-
   message.success(`文件已添加: ${file.name}`)
 }
 
@@ -495,25 +422,18 @@ const handleFileSelect = (file: File) => {
 const validateFileForPlugin = (file: File, pluginKey: string): boolean => {
   const isImage = file.type.startsWith('image/')
   const isPdf = file.type === 'application/pdf'
-
-  if (pluginKey === 'pdf_parser') {
-    if (!isPdf) {
-      message.error('PDF 解析只能上传 PDF 文件')
-      return false
-    }
-  } else if (pluginKey === 'image_recognition') {
-    if (!isImage) {
-      message.error('图片识别只能上传图片文件')
-      return false
-    }
+  if (pluginKey === 'pdf_parser' && !isPdf) {
+    message.error('PDF 解析只能上传 PDF 文件')
+    return false
+  } else if (pluginKey === 'image_recognition' && !isImage) {
+    message.error('图片识别只能上传图片文件')
+    return false
   }
-
   return true
 }
 
 // 清除文件
 const clearFile = () => {
-  // 释放预览 URL
   if (uploadedFilePreviewUrl.value) {
     URL.revokeObjectURL(uploadedFilePreviewUrl.value)
     uploadedFilePreviewUrl.value = ''
@@ -523,16 +443,10 @@ const clearFile = () => {
 
 // 获取输入框提示文本
 const getInputPlaceholder = () => {
-  if (!canSendMessage.value) {
-    return '请先选择一个模型'
-  }
-  if (selectedPluginKey.value === 'pdf_parser') {
-    return '粘贴 PDF 文件，然后输入您的问题...'
-  }
-  if (selectedPluginKey.value === 'image_recognition') {
-    return '粘贴图片，然后输入您的问题...'
-  }
-  return '输入您的问题...'
+  if (!canSendMessage.value) return '请先选择一个模型'
+  if (selectedPluginKey.value === 'pdf_parser') return '粘贴 PDF 文件，然后输入您的问题...'
+  if (selectedPluginKey.value === 'image_recognition') return '粘贴图片，然后输入您的问题...'
+  return '输入您的问题... (Shift + Enter 换行)'
 }
 
 // 格式化文件大小
@@ -542,7 +456,6 @@ const formatFileSize = (bytes: number) => {
   return (bytes / 1024 / 1024).toFixed(1) + ' MB'
 }
 
-
 // 显示模型选择弹窗
 const showModelSelector = () => {
   modelSelectorVisible.value = true
@@ -551,10 +464,7 @@ const showModelSelector = () => {
 // 选择模型并关闭弹窗
 const selectModelAndClose = (model: API.ModelVO) => {
   selectedModel.value = model
-  // 如果模型不支持深度思考，关闭深度思考
-  if (model.supportReasoning !== 1) {
-    enableReasoning.value = false
-  }
+  if (model.supportReasoning !== 1) enableReasoning.value = false
   modelSelectorVisible.value = false
 }
 
@@ -569,7 +479,6 @@ const getAIDisplayName = () => {
   if (routingStrategy.value === 'fixed' && selectedModel.value) {
     return selectedModel.value.modelName
   }
-  // 非固定策略时显示策略名称
   const option = routingStrategyOptions.find(opt => opt.value === routingStrategy.value)
   return option?.label || 'AI'
 }
@@ -581,32 +490,20 @@ const handleStrategyChange = ({ key }: { key: string }) => {
 
 // 发送消息
 const sendMessage = async () => {
-  if (!canSendMessage.value || !inputMessage.value.trim()) {
-    return
-  }
+  if (!canSendMessage.value || !inputMessage.value.trim()) return
 
   const userMessage = inputMessage.value.trim()
+  const userMsg: Message = { role: 'user', content: userMessage }
 
-  // 添加用户消息到对话列表
-  const userMsg: Message = {
-    role: 'user',
-    content: userMessage,
-  }
-
-  // 如果有上传的文件，添加文件信息和预览
   if (uploadedFile.value) {
     userMsg.file = {
       name: uploadedFile.value.name,
       size: uploadedFile.value.size,
       type: uploadedFile.value.type,
     }
-    // 保存图片预览 URL
-    if (uploadedFilePreviewUrl.value) {
-      userMsg.filePreviewUrl = uploadedFilePreviewUrl.value
-    }
+    if (uploadedFilePreviewUrl.value) userMsg.filePreviewUrl = uploadedFilePreviewUrl.value
   }
 
-  // 如果启用了插件，记录插件信息
   if (enableWebSearch.value) {
     userMsg.pluginKey = 'web_search'
   } else if (selectedPluginKey.value) {
@@ -614,31 +511,24 @@ const sendMessage = async () => {
   }
 
   messages.value.push(userMsg)
-
   loading.value = true
   streamingContent.value = ''
   streamingThinking.value = ''
 
-  // 滚动到底部
   nextTick(() => scrollToBottom())
 
   try {
-    // 如果有上传文件，使用文件上传接口
     if (uploadedFile.value) {
       await sendMessageWithFile()
     } else {
       await sendNormalMessage()
     }
-
-    // 成功后清空输入框和文件
     inputMessage.value = ''
     clearFile()
-    // 清空插件选择（但保留联网搜索开关状态）
     selectedPluginKey.value = ''
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : '未知错误'
     message.error('对话失败: ' + errorMsg)
-    // 移除失败的用户消息
     messages.value.pop()
     streamingContent.value = ''
     streamingThinking.value = ''
@@ -647,128 +537,73 @@ const sendMessage = async () => {
   }
 }
 
-// 发送普通消息（不带文件）
+// 发送普通消息
 const sendNormalMessage = async () => {
-  // 构建请求
   const chatRequest: Record<string, unknown> = {
-    messages: messages.value.map(m => ({
-      role: m.role,
-      content: m.content,
-    })),
+    messages: messages.value.map(m => ({ role: m.role, content: m.content })),
     stream: true,
     routing_strategy: routingStrategy.value,
   }
 
-  // 固定模型策略时，传递选择的模型和深度思考配置
   if (routingStrategy.value === 'fixed' && selectedModel.value) {
     chatRequest.model = selectedModel.value.modelKey
     chatRequest.enable_reasoning = selectedModel.value.supportReasoning === 1 ? enableReasoning.value : false
   }
 
-  // 如果启用了联网搜索，添加插件信息
-  if (enableWebSearch.value) {
-    chatRequest.plugin_key = 'web_search'
-  }
-
-  // 调用流式API
+  if (enableWebSearch.value) chatRequest.plugin_key = 'web_search'
   await streamChat(chatRequest)
 }
 
 // 发送带文件的消息
 const sendMessageWithFile = async () => {
-  if (!uploadedFile.value) {
-    return
-  }
-
-  // 构建 FormData
+  if (!uploadedFile.value) return
   const formData = new FormData()
   formData.append('file', uploadedFile.value)
-
-  // 添加消息列表（JSON 字符串）
-  const messagesData = messages.value.map(m => ({
-    role: m.role,
-    content: m.content,
-  }))
-  formData.append('messages', JSON.stringify(messagesData))
-
-  // 添加流式参数
+  formData.append('messages', JSON.stringify(messages.value.map(m => ({ role: m.role, content: m.content }))))
   formData.append('stream', 'true')
+  if (routingStrategy.value) formData.append('routing_strategy', routingStrategy.value)
 
-  // 添加路由策略
-  if (routingStrategy.value) {
-    formData.append('routing_strategy', routingStrategy.value)
-  }
-
-  // 固定模型策略时，传递选择的模型
   if (routingStrategy.value === 'fixed' && selectedModel.value && selectedModel.value.modelKey) {
     formData.append('model', selectedModel.value.modelKey)
     if (selectedModel.value.supportReasoning === 1) {
       formData.append('enable_reasoning', String(enableReasoning.value))
     }
   }
-
-  // 传递选择的插件
-  if (selectedPluginKey.value) {
-    formData.append('plugin_key', selectedPluginKey.value)
-  }
-
-  // 调用文件上传接口
+  if (selectedPluginKey.value) formData.append('plugin_key', selectedPluginKey.value)
   await streamChatWithFile(formData)
 }
 
 // 流式调用（带文件上传）
 const streamChatWithFile = async (formData: FormData) => {
   const url = `/api/internal/chat/completions/upload`
-
-  const response = await fetch(url, {
-    method: 'POST',
-    credentials: 'include', // 携带 session cookie
-    body: formData,
-  })
-
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`)
-  }
-
+  const response = await fetch(url, { method: 'POST', credentials: 'include', body: formData })
+  if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
   await processStream(response)
 }
 
 // 流式调用（普通消息）
 const streamChat = async (chatRequest: Record<string, unknown>) => {
   const url = `/api/internal/chat/completions`
-
   const response = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    credentials: 'include', // 携带 session cookie
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(chatRequest),
   })
-
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`)
-  }
-
+  if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
   const contentType = response.headers.get('content-type') || ''
   if (contentType.includes('application/json')) {
     const result = await response.json()
-    if (result.code !== 0) {
-      throw new Error(result.message || '请求失败')
-    }
+    if (result.code !== 0) throw new Error(result.message || '请求失败')
   }
-
   await processStream(response)
 }
 
-// 处理流式响应（通用方法）
+// 处理流式响应
 const processStream = async (response: Response) => {
   const reader = response.body?.getReader()
   const decoder = new TextDecoder()
-
-  if (!reader) {
-    throw new Error('无法获取响应流')
-  }
+  if (!reader) throw new Error('无法获取响应流')
 
   let buffer = ''
   let assistantContent = ''
@@ -777,63 +612,36 @@ const processStream = async (response: Response) => {
   while (true) {
     const { done, value } = await reader.read()
     if (done) break
-
-    // 解码当前块，追加到缓冲区
     buffer += decoder.decode(value, { stream: true })
-
-    // SSE 格式：每个消息以 \n\n 分隔
     const parts = buffer.split('\n\n')
-    // 保留最后一个可能不完整的部分
     buffer = parts.pop() || ''
-
-    // 处理完整的消息
     for (const part of parts) {
       const lines = part.split('\n')
       for (const line of lines) {
         if (line.startsWith('data:')) {
-          // 移除 'data:' 前缀
           const data = line.substring(5).trim()
-
-          if (!data) {
-            continue
-          }
-
+          if (!data) continue
           try {
-            // 解析 JSON 格式的 StreamResponse
             const streamResponse: API.StreamResponse = JSON.parse(data)
-
-            // 检查是否结束（finishReason 为 "stop"）
             if (streamResponse.choices && streamResponse.choices.length > 0) {
               const choice = streamResponse.choices[0]
-
-              // 如果有 finishReason，表示流结束
-              if (choice.finishReason === 'stop') {
-                continue
-              }
-
+              if (choice.finishReason === 'stop') continue
               const delta = choice.delta
-
-              // 处理深度思考内容
               if (delta?.reasoningContent) {
                 thinkingContent += delta.reasoningContent
                 streamingThinking.value = thinkingContent
               }
-
-              // 处理普通文本内容
               if (delta?.content) {
                 assistantContent += delta.content
                 streamingContent.value = assistantContent
               }
             }
-          } catch (e) {
-            console.error('解析 SSE 数据失败:', data, e)
-          }
+          } catch (e) { console.error('解析 SSE 数据失败:', data, e) }
         }
       }
     }
   }
 
-  // 处理缓冲区剩余数据
   if (buffer) {
     const lines = buffer.split('\n')
     for (const line of lines) {
@@ -844,10 +652,7 @@ const processStream = async (response: Response) => {
             const streamResponse: API.StreamResponse = JSON.parse(data)
             if (streamResponse.choices && streamResponse.choices.length > 0) {
               const choice = streamResponse.choices[0]
-              // 如果有 finishReason，表示流结束
-              if (choice.finishReason === 'stop') {
-                continue
-              }
+              if (choice.finishReason === 'stop') continue
               const delta = choice.delta
               if (delta?.reasoningContent) {
                 thinkingContent += delta.reasoningContent
@@ -858,27 +663,18 @@ const processStream = async (response: Response) => {
                 streamingContent.value = assistantContent
               }
             }
-          } catch (e) {
-            console.error('解析剩余 SSE 数据失败:', data, e)
-          }
+          } catch (e) { console.error('解析剩余 SSE 数据失败:', data, e) }
         }
       }
     }
   }
 
-  // 完成后添加到消息列表
-  const msg: Message = {
-    role: 'assistant',
-    content: assistantContent,
-  }
-
-  // 如果有思考内容，添加到消息中
+  const msg: Message = { role: 'assistant', content: assistantContent }
   if (thinkingContent) {
     msg.thinking = thinkingContent
     msg.answer = assistantContent
-    msg.thinkingExpanded = false  // 默认收起
+    msg.thinkingExpanded = false
   }
-
   messages.value.push(msg)
   streamingContent.value = ''
   streamingThinking.value = ''
@@ -925,131 +721,29 @@ onMounted(() => {
 </script>
 
 <style scoped>
-#chatPage {
+/* 整体页面 */
+.morandi-chat-page {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 64px);
-  background: linear-gradient(180deg, #f0f2f5 0%, #fafafa 100%);
+  height: calc(100vh - 72px);
+  background: radial-gradient(circle at 50% 0%, #FAF7F4 0%, #F5F2EF 100%);
   overflow: hidden;
-}
-
-.model-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
-  padding: 12px 0;
-}
-
-.model-card {
-  padding: 18px;
-  border: 2px solid #f0f0f0;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.3s;
-  background: white;
   position: relative;
 }
 
-.model-card:hover {
-  border-color: #1890ff;
-  box-shadow: 0 4px 16px rgba(24, 144, 255, 0.15);
-  transform: translateY(-2px);
-}
-
-.model-card.active {
-  border-color: #1890ff;
-  background: linear-gradient(135deg, #e6f7ff 0%, #f0f9ff 100%);
-  box-shadow: 0 4px 16px rgba(24, 144, 255, 0.2);
-}
-
-.model-card.active::after {
-  content: '✓';
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  width: 22px;
-  height: 22px;
-  background: #1890ff;
-  color: white;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: bold;
-  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.3);
-}
-
-.model-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-  gap: 8px;
-}
-
-.model-card.active .model-header {
-  padding-left: 28px;
-}
-
-.model-name {
-  font-size: 17px;
-  font-weight: 700;
-  color: #262626;
-  letter-spacing: -0.3px;
-  flex: 1;
-}
-
-.model-card.active .model-name {
-  color: #1890ff;
-}
-
-.model-info {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-  font-size: 12px;
-  color: #8c8c8c;
-}
-
-.model-provider {
-  color: #1890ff;
-  font-weight: 500;
-  background: #f0f5ff;
-  padding: 3px 10px;
-  border-radius: 6px;
-  font-size: 11px;
-}
-
-.model-price {
-  color: #52c41a;
-  font-weight: 600;
-  font-size: 12px;
-}
-
-.model-desc {
-  font-size: 13px;
-  color: #595959;
-  line-height: 1.5;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-/* 对话内容包裹层 */
+/* 核心包裹层 */
 .chat-wrapper {
-  flex: 1;
-  max-width: 1000px;
-  margin: 0 auto;
-  width: 100%;
   display: flex;
   flex-direction: column;
+  flex: 1;
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  height: 100%;
   min-height: 0;
-  padding: 24px;
+  position: relative;
+  /* 关键：底部留出空间给悬浮的输入框，确保滑动到底部时内容能完全露出 */
+  padding: 24px 24px 240px 24px;
 }
 
 /* 消息列表区域 */
@@ -1057,644 +751,183 @@ onMounted(() => {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 0;
-  min-height: 0;
-  margin-bottom: 16px;
+  padding-right: 8px; /* 给滚动条留点空间 */
 }
 
+/* 空状态 */
 .empty-state {
   text-align: center;
-  padding: 80px 20px;
-  color: #8c8c8c;
+  padding: 120px 20px;
 }
-
 .empty-state h2 {
-  font-size: 28px;
+  font-size: 32px;
   margin-bottom: 12px;
-  color: #262626;
+  color: var(--text-main);
   font-weight: 600;
-  background: linear-gradient(135deg, #1890ff 0%, #722ed1 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  letter-spacing: 2px;
 }
-
 .empty-state p {
   font-size: 15px;
-  color: #8c8c8c;
+  color: var(--text-secondary);
 }
 
+/* 消息气泡 */
 .message-wrapper {
-  margin-bottom: 24px;
-  animation: messageSlideIn 0.3s ease-out;
+  margin-bottom: 28px;
+  animation: messageFadeIn 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
-
-.message-wrapper.user {
-  align-items: flex-end;
+@keyframes messageFadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
 }
-
-.message-wrapper.assistant {
-  align-items: flex-start;
-}
-
-/* 角色标签 */
-.role-label {
-  font-size: 12px;
-  font-weight: 600;
-  padding: 2px 0;
-  margin-bottom: 2px;
-}
-
-.assistant-label {
-  color: #8c8c8c;
-  padding-left: 4px;
-}
-
-.user-label {
-  color: #1890ff;
-  padding-right: 4px;
-}
-
-@keyframes messageSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.message {
-  padding: 14px 18px;
-  border-radius: 16px;
-  max-width: 100%;
-  transition: all 0.3s;
-  line-height: 1.7;
-  position: relative;
-}
+.message-wrapper.user { align-items: flex-end; }
+.message-wrapper.assistant { align-items: flex-start; }
+.role-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); padding: 0 4px; }
 
 .message.user {
-  background: linear-gradient(135deg, #1890ff 0%, #40a9ff 100%);
-  color: white;
-  width: fit-content;
-  max-width: 65%;
-  box-shadow: 0 3px 14px rgba(24, 144, 255, 0.28);
-  word-break: break-word;
-  border-bottom-right-radius: 4px;
-}
-
-.message.user:hover {
-  box-shadow: 0 5px 20px rgba(24, 144, 255, 0.38);
-  transform: translateY(-1px);
+  background: linear-gradient(135deg, #B8A9B8 0%, #C5B8C5 100%);
+  color: #fff;
+  padding: 16px 20px;
+  border-radius: 20px 20px 4px 20px;
+  max-width: 75%;
+  box-shadow: 0 8px 24px rgba(184, 169, 184, 0.25);
 }
 
 .message.assistant {
-  background: white;
-  border: 1px solid #f0f0f0;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 20px 24px;
+  border-radius: 20px 20px 20px 4px;
   max-width: 90%;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-  border-bottom-left-radius: 4px;
+  box-shadow: var(--shadow-soft);
 }
 
-.message.assistant:hover {
-  box-shadow: 0 3px 16px rgba(0, 0, 0, 0.08);
-  border-color: #e8e8e8;
-}
-
-.message-content {
-  line-height: 1.7;
-  word-wrap: break-word;
-  font-size: 14px;
-}
-
-.message.user .message-content {
-  color: rgba(255, 255, 255, 0.98);
-  font-weight: 400;
-}
-
-.loading-message {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: #8c8c8c;
-  font-size: 14px;
-}
-
+/* Markdown 内容 */
 .message-content :deep(pre) {
-  background: #282c34;
+  background: #F2EFEC;
   padding: 16px;
-  border-radius: 10px;
+  border-radius: 12px;
   overflow-x: auto;
   margin: 12px 0;
-  border: 1px solid #e0e0e0;
+  border: 1px dashed var(--border-color);
 }
-
 .message-content :deep(code) {
-  background: #f0f2f5;
+  background: #F2EFEC;
   padding: 3px 8px;
   border-radius: 6px;
-  font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
+  font-family: 'Monaco', 'Consolas', monospace;
   font-size: 13px;
-  color: #d63384;
-  border: 1px solid #e8e8e8;
+  color: #8B7896;
 }
-
-.message-content :deep(pre code) {
-  background: transparent;
-  padding: 0;
-  border: none;
-  color: #abb2bf;
-  font-size: 13px;
-}
-
 .message-content :deep(blockquote) {
-  border-left: 4px solid #1890ff;
+  border-left: 4px solid var(--color-secondary);
   padding-left: 16px;
   margin: 12px 0;
-  color: #595959;
-  background: #f0f5ff;
+  color: var(--text-secondary);
+  background: rgba(169, 180, 194, 0.1);
   padding: 12px 16px;
-  border-radius: 8px;
+  border-radius: 0 12px 12px 0;
 }
 
-.message-content :deep(ul),
-.message-content :deep(ol) {
-  padding-left: 24px;
-  margin: 8px 0;
-}
-
-.message-content :deep(li) {
-  margin: 6px 0;
-}
-
-.message-content :deep(a) {
-  color: #1890ff;
-  text-decoration: none;
-  border-bottom: 1px solid transparent;
-  transition: all 0.3s;
-}
-
-.message-content :deep(a:hover) {
-  border-bottom-color: #1890ff;
-}
-
-/* 思考内容样式 */
+/* 思考区 */
 .thinking-section {
-  margin-bottom: 18px;
+  margin-bottom: 16px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #faf5ff 0%, #f0f0f0 100%);
+  background: rgba(184, 169, 184, 0.05);
+  border: 1px dashed rgba(184, 169, 184, 0.3);
   overflow: hidden;
-  border: 1px solid #d3adf7;
 }
-
-.thinking-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 16px;
-  cursor: pointer;
-  user-select: none;
-  transition: all 0.3s;
-}
-
-.thinking-toggle:hover {
-  background: rgba(114, 46, 209, 0.05);
-}
-
-.thinking-title {
-  font-size: 13px;
-  color: #722ed1;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.thinking-title::before {
-  content: '💭';
-  font-size: 14px;
-}
-
-.thinking-arrow {
-  font-size: 11px;
-  color: #722ed1;
-  transition: transform 0.3s;
-}
-
-.thinking-arrow.expanded {
-  transform: rotate(180deg);
-}
-
+.thinking-toggle { padding: 10px 16px; cursor: pointer; }
+.thinking-title { font-size: 13px; color: var(--color-primary); font-weight: 500; }
 .thinking-detail {
-  padding: 16px 18px;
-  background: rgba(250, 245, 255, 0.5);
-  border-top: 1px solid #efdbff;
-  color: #595959;
-  font-size: 14px;
-  line-height: 1.7;
+  padding: 16px;
+  background: rgba(250, 247, 244, 0.5);
+  border-top: 1px dashed rgba(184, 169, 184, 0.2);
+  color: var(--text-secondary);
 }
 
-.thinking-detail :deep(p) {
-  margin: 8px 0;
-  color: #666;
-}
-
-.thinking-detail :deep(ul),
-.thinking-detail :deep(ol) {
-  margin: 8px 0;
-  padding-left: 20px;
-  color: #666;
-}
-
-.thinking-detail :deep(li) {
-  margin: 4px 0;
-}
-
-.thinking-detail :deep(strong),
-.thinking-detail :deep(b) {
-  color: #555;
-  font-weight: 500;
-}
-
-.thinking-detail :deep(code) {
-  background: #f0f0f0;
-  color: #666;
-  font-size: 14px;
-}
-
-.answer-text {
-  color: #262626;
-}
-
-/* 输入区域 */
+/* =========================================
+   悬浮输入框区域 (绝对定位在底部)
+   ========================================= */
 .input-container {
-  flex-shrink: 0;
-  background: white;
-  border-radius: 16px;
-  padding: 20px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
-  border: 1px solid #f0f0f0;
+  position: absolute;
+  bottom: 24px; /* 悬浮高度 */
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 48px); /* 左右留白 */
+  max-width: 860px;
+  background: rgba(250, 247, 244, 0.85);
+  backdrop-filter: blur(20px);
+  border-radius: 24px;
+  padding: 16px 24px;
+  box-shadow: 0 12px 40px rgba(184, 169, 184, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+  border: 1px solid var(--border-color);
+  z-index: 10;
 }
 
 .options-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #e8e8e8;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px dashed var(--border-color);
   flex-wrap: wrap;
 }
 
-.model-select-button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid #e8e8e8;
-  border-radius: 10px;
-  padding: 8px 14px;
-  height: auto;
+/* 统一所有胶囊按钮的样式 */
+.capsule-btn {
+  border-radius: 30px !important;
+  border: 1px solid var(--border-color) !important;
+  background: rgba(255, 255, 255, 0.6) !important;
+  color: var(--text-main) !important;
   font-size: 13px;
-  transition: all 0.3s;
-  background: #fafafa;
-}
-
-.model-select-button:hover {
-  border-color: #1890ff;
-  color: #1890ff;
-  background: #f0f5ff;
-  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.1);
-  transform: translateY(-1px);
-}
-
-.current-model {
-  font-weight: 600;
-  color: #262626;
-}
-
-.dropdown-icon {
-  font-size: 11px;
-  opacity: 0.5;
-}
-
-.reasoning-switch {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  background: linear-gradient(135deg, #f9f0ff 0%, #efdbff 100%);
-  border: 1px solid #d3adf7;
-  border-radius: 10px;
-  transition: all 0.3s;
-}
-
-.reasoning-switch:hover {
-  background: linear-gradient(135deg, #f9f0ff 0%, #d3adf7 100%);
-  box-shadow: 0 2px 8px rgba(114, 46, 209, 0.15);
-}
-
-.reasoning-icon {
-  font-size: 15px;
-  color: #722ed1;
-}
-
-.reasoning-label {
-  font-size: 13px;
-  color: #722ed1;
-  font-weight: 500;
-  margin-right: 4px;
-}
-
-/* 路由策略选择器样式 */
-.strategy-select-button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid #b5f5ec;
-  border-radius: 10px;
-  padding: 8px 14px;
-  height: auto;
-  font-size: 13px;
-  background: linear-gradient(135deg, #f0f9ff 0%, #e6f7ff 100%);
-  transition: all 0.3s;
-}
-
-.strategy-select-button:hover {
-  border-color: #1890ff;
-  background: linear-gradient(135deg, #e6f7ff 0%, #bae7ff 100%);
-  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.15);
-  transform: translateY(-1px);
-}
-
-.strategy-label {
-  font-weight: 600;
-  color: #1890ff;
-}
-
-.strategy-option {
-  padding: 8px 12px;
-  min-width: 260px;
-  border-radius: 8px;
-  transition: all 0.3s;
-}
-
-.strategy-option:hover {
-  background: #f5f5f5;
-}
-
-.strategy-option-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 6px;
-}
-
-.strategy-option-label {
-  font-size: 14px;
-  font-weight: 600;
-  color: #262626;
-}
-
-.strategy-option-desc {
-  font-size: 12px;
-  color: #8c8c8c;
-  line-height: 1.5;
-}
-
-.strategy-active {
-  background: linear-gradient(135deg, #e6f7ff 0%, #bae7ff 100%);
-  border: 1px solid #91d5ff;
-}
-
-.strategy-active .strategy-option-label {
-  color: #1890ff;
-}
-
-/* 插件开关 */
-.plugin-switch {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  background: linear-gradient(135deg, #f0f5ff 0%, #e8f4ff 100%);
-  border: 1px solid #d6e4ff;
-  border-radius: 10px;
-  transition: all 0.3s;
-}
-
-.plugin-switch:hover {
-  background: linear-gradient(135deg, #e6f4ff 0%, #d6e4ff 100%);
-  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.15);
-}
-
-.plugin-icon {
-  font-size: 15px;
-  color: #1890ff;
-}
-
-.plugin-label {
-  font-size: 13px;
-  color: #1890ff;
-  font-weight: 500;
-  margin-right: 4px;
-}
-
-/* 插件按钮 */
-.plugin-button {
+  height: 36px;
+  padding: 0 16px;
+  transition: all 0.3s ease;
   display: flex;
   align-items: center;
   gap: 6px;
-  border-radius: 10px;
-  font-size: 13px;
-  border: 1px solid #e8e8e8;
-  transition: all 0.3s;
-  padding: 8px 14px;
-  background: white;
-  color: #595959;
 }
 
-.plugin-button:hover {
-  border-color: #1890ff;
-  color: #1890ff;
-  background: #f0f5ff;
-  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.1);
+.capsule-btn:hover {
+  border-color: var(--color-primary) !important;
+  color: var(--color-primary) !important;
+  background: #fff !important;
   transform: translateY(-1px);
 }
 
-/* Primary 状态的插件按钮 */
-.plugin-button.ant-btn-primary {
-  background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%) !important;
-  border-color: #1890ff !important;
-  color: white !important;
-  font-weight: 500;
-}
-
-.plugin-button.ant-btn-primary:hover {
-  background: linear-gradient(135deg, #40a9ff 0%, #1890ff 100%) !important;
-  border-color: #40a9ff !important;
-  color: white !important;
-  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.3);
-}
-
-/* 文件信息栏 */
-.file-info-bar {
-  padding: 14px 16px;
-  background: linear-gradient(135deg, #e6fffb 0%, #e6f7ff 100%);
-  border: 1px solid #b5f5ec;
-  border-radius: 12px;
-  margin-bottom: 14px;
-  transition: all 0.3s;
-}
-
-.file-info-bar:hover {
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-}
-
-.file-preview-container {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.file-preview-image {
-  width: 80px;
-  height: 80px;
-  object-fit: cover;
-  border-radius: 8px;
-  border: 2px solid #fff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.file-info {
-  flex: 1;
-}
-
-.file-name {
-  font-weight: 600;
-  color: #262626;
-  font-size: 14px;
-}
-
-.file-size {
-  font-size: 12px;
-  color: #8c8c8c;
-  margin-left: 8px;
-}
-
-.delete-icon {
-  font-size: 16px;
-  color: #ff7875;
-  cursor: pointer;
-  transition: all 0.3s;
-  padding: 4px;
-}
-
-.delete-icon:hover {
-  color: #ff4d4f;
-  background: rgba(255, 77, 79, 0.1);
-  border-radius: 4px;
-  transform: scale(1.15);
-}
-
-/* 消息中的文件信息 */
-.message-file {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  background: rgba(255, 255, 255, 0.25);
-  border-radius: 10px;
-  margin-bottom: 10px;
-  font-size: 13px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-}
-
-.message.user .message-file {
-  background: rgba(255, 255, 255, 0.2);
-  color: rgba(255, 255, 255, 1);
-  border-color: rgba(255, 255, 255, 0.25);
-}
-
-.message.user .message-file .file-name {
-  color: rgba(255, 255, 255, 1);
-  font-weight: 500;
-}
-
-.message.user .message-file .file-size {
-  color: rgba(255, 255, 255, 0.85);
-}
-
-/* 图片预览 */
-.image-preview {
-  margin-bottom: 12px;
-  max-width: 240px;
-}
-
-.image-thumbnail {
-  width: 100%;
-  max-width: 240px;
-  max-height: 240px;
-  border-radius: 12px;
-  border: 2px solid rgba(255, 255, 255, 0.4);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-  display: block;
-  object-fit: cover;
-  transition: all 0.3s;
-}
-
-.image-thumbnail:hover {
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
-  transform: scale(1.02);
-}
-
-.image-info {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.image-name {
-  font-weight: 500;
-}
-
-.image-size {
-  opacity: 0.8;
-}
-
-.input-wrapper {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+/* 选中状态（Primary） */
+.capsule-btn.ant-btn-primary {
+  background: var(--color-primary) !important;
+  border-color: var(--color-primary) !important;
+  color: #fff !important;
+  box-shadow: 0 4px 12px rgba(184, 169, 184, 0.3) !important;
 }
 
 .chat-input {
-  border-radius: 12px;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
   font-size: 15px;
-  border: 1px solid #e8e8e8;
-  transition: all 0.3s;
+  color: var(--text-main);
+  resize: none;
+  padding: 8px 0;
 }
-
-.chat-input:hover {
-  border-color: #d9d9d9;
-}
-
-.chat-input:focus {
-  border-color: #1890ff;
-  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+.chat-input:hover, .chat-input:focus {
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 .input-actions {
   display: flex;
   justify-content: flex-end;
   align-items: center;
+  margin-top: 8px;
 }
 
 .input-actions :deep(.ant-btn-primary) {
@@ -1702,34 +935,90 @@ onMounted(() => {
   padding: 0 32px;
   font-size: 15px;
   font-weight: 500;
-  border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.2);
+  border-radius: 20px;
+  background: var(--color-primary);
+  border: none;
+  box-shadow: 0 4px 12px rgba(184, 169, 184, 0.3);
+  transition: all 0.3s ease;
 }
 
 .input-actions :deep(.ant-btn-primary:hover) {
-  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.3);
-  transform: translateY(-1px);
+  background: #C5B8C5;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(184, 169, 184, 0.4);
 }
 
-/* 滚动条样式 */
-.messages-container::-webkit-scrollbar {
-  width: 8px;
+/* 文件预览 */
+.file-info-bar {
+  padding: 12px 16px;
+  background: rgba(184, 169, 184, 0.05);
+  border: 1px dashed var(--border-color);
+  border-radius: 12px;
+  margin-bottom: 12px;
 }
+.file-preview-container { display: flex; align-items: center; gap: 12px; }
+.file-preview-image { width: 60px; height: 60px; object-fit: cover; border-radius: 8px; }
+.file-name { font-weight: 500; color: var(--text-main); font-size: 13px; }
+.file-size { font-size: 12px; color: var(--text-secondary); margin-left: 8px; }
+.delete-icon { font-size: 16px; color: #C48383; cursor: pointer; transition: all 0.3s; }
+.delete-icon:hover { color: #ff4d4f; transform: scale(1.1); }
 
-.messages-container::-webkit-scrollbar-track {
-  background: transparent;
-  margin: 4px;
+/* 模型选择弹窗 */
+.model-category-filter {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px dashed var(--border-color);
 }
+.category-btn {
+  padding: 8px 24px;
+  border-radius: 30px;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  background: rgba(184, 169, 184, 0.05);
+  transition: all 0.3s ease;
+}
+.category-btn.active {
+  background: var(--color-primary);
+  color: white;
+  box-shadow: 0 4px 12px rgba(184, 169, 184, 0.3);
+}
+.category-btn:hover:not(.active) { background: rgba(184, 169, 184, 0.15); }
 
-.messages-container::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #d9d9d9 0%, #bfbfbf 100%);
-  border-radius: 10px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
+.model-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+  padding: 8px 0;
 }
+.model-card {
+  padding: 24px;
+  border: 1px dashed var(--border-color);
+  border-radius: 16px;
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+.model-card:hover {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-soft);
+  transform: translateY(-4px);
+}
+.model-card.active {
+  border: 2px solid var(--color-primary);
+  background: rgba(184, 169, 184, 0.05);
+}
+.model-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 8px; }
+.model-name { font-size: 16px; font-weight: 600; color: var(--text-main); }
+.model-info { display: flex; justify-content: space-between; align-items: center; margin: 12px 0; font-size: 12px; }
+.model-provider { color: var(--color-secondary); background: rgba(169, 180, 194, 0.15); padding: 3px 10px; border-radius: 6px; }
+.model-price { color: var(--color-primary); font-weight: 600; }
+.model-desc { font-size: 13px; color: var(--text-secondary); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
-.messages-container::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, #bfbfbf 0%, #8c8c8c 100%);
-  background-clip: padding-box;
-}
+/* 滚动条极简化 */
+.messages-container::-webkit-scrollbar { width: 6px; }
+.messages-container::-webkit-scrollbar-thumb { background: rgba(184, 169, 184, 0.2); border-radius: 10px; }
+.messages-container::-webkit-scrollbar-thumb:hover { background: rgba(184, 169, 184, 0.4); }
 </style>

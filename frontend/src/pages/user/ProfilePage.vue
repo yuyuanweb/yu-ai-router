@@ -1,381 +1,108 @@
 <template>
-  <div id="profilePage">
-    <!-- 余额卡片 -->
-    <a-row :gutter="16" style="margin-bottom: 16px">
-      <a-col :span="24">
-        <a-card title="账户余额" :loading="balanceLoading">
-          <a-row :gutter="16">
-            <a-col :span="8">
-              <a-statistic
-                title="当前余额"
-                :value="balanceInfo.balance || 0"
-                prefix="¥"
-                :precision="2"
-                :value-style="{
-                  color: (balanceInfo.balance || 0) > 10 ? '#3f8600' : '#cf1322',
-                  fontSize: '32px',
-                  fontWeight: 'bold'
-                }"
-              />
-              <a-button
-                type="primary"
-                size="large"
-                @click="showRechargeModal"
-                style="margin-top: 16px; width: 100%"
-              >
-                立即充值
-              </a-button>
-            </a-col>
-            <a-col :span="8">
-              <a-statistic
-                title="累计充值"
-                :value="balanceInfo.totalRecharge || 0"
-                prefix="¥"
-                :precision="2"
-                :value-style="{ color: '#1890ff' }"
-              />
-            </a-col>
-            <a-col :span="8">
-              <a-statistic
-                title="累计消费"
-                :value="balanceInfo.totalSpending || 0"
-                prefix="¥"
-                :precision="2"
-                :value-style="{ color: '#faad14' }"
-              />
-            </a-col>
-          </a-row>
-        </a-card>
-      </a-col>
-    </a-row>
-
-    <a-row :gutter="16">
+  <div id="profilePage" class="morandi-dashboard">
+    <a-row :gutter="24">
       <!-- 配额卡片 -->
-      <a-col :span="8">
-        <a-card title="配额信息" :loading="loading">
-          <a-statistic
-            title="Token配额"
-            :value="quotaInfo.tokenQuota === -1 ? '无限制' : quotaInfo.tokenQuota"
-            :value-style="{ color: '#3f8600' }"
-          />
-          <a-divider />
-          <a-statistic
-            title="已使用"
-            :value="quotaInfo.usedTokens || 0"
-            suffix="Tokens"
-          />
-          <a-divider />
-          <a-statistic
-            title="剩余配额"
-            :value="
-              quotaInfo.remainingQuota === -1 ? '无限制' : quotaInfo.remainingQuota
-            "
-            :value-style="{ color: '#cf1322' }"
-          />
-          <a-progress
-            v-if="quotaInfo.tokenQuota !== -1"
-            :percent="usagePercent"
-            :status="usagePercent > 90 ? 'exception' : 'normal'"
-            style="margin-top: 16px"
-          />
-        </a-card>
+      <a-col :xs="24" :md="12">
+        <div class="stat-card">
+          <div class="card-header">
+            <h3>配额信息</h3>
+            <div class="header-icon quota-icon">✦</div>
+          </div>
+          <a-spin :spinning="loading">
+            <div class="stat-content">
+              <a-statistic
+                title="Token 配额"
+                :value="quotaInfo.tokenQuota === -1 ? '无限制' : quotaInfo.tokenQuota"
+                class="morandi-stat primary"
+              />
+              <a-progress
+                v-if="quotaInfo.tokenQuota !== -1"
+                :percent="usagePercent"
+                :status="usagePercent > 90 ? 'exception' : 'normal'"
+                stroke-color="#B8A9B8"
+                trail-color="#EBE5DF"
+                class="morandi-progress"
+              />
+              <div class="quota-details">
+                <div class="detail-item">
+                  <span class="label">已使用</span>
+                  <span class="value">{{ (quotaInfo.usedTokens || 0).toLocaleString() }} Tokens</span>
+                </div>
+                <div class="detail-item">
+                  <span class="label">剩余配额</span>
+                  <span class="value">{{ quotaInfo.remainingQuota === -1 ? '无限制' : (quotaInfo.remainingQuota || 0).toLocaleString() }}</span>
+                </div>
+              </div>
+            </div>
+          </a-spin>
+        </div>
       </a-col>
 
       <!-- Token统计卡片 -->
-      <a-col :span="8">
-        <a-card title="Token消耗" :loading="loading">
-          <a-statistic
-            title="累计消耗"
-            :value="summaryStats.totalTokens || 0"
-            suffix="Tokens"
-            :value-style="{ color: '#1890ff' }"
-          />
-          <a-divider />
-          <a-statistic
-            title="总请求数"
-            :value="summaryStats.totalRequests || 0"
-          />
-          <a-divider />
-          <a-statistic
-            title="成功请求数"
-            :value="summaryStats.successRequests || 0"
-            :value-style="{ color: '#52c41a' }"
-          />
-        </a-card>
-      </a-col>
-
-      <!-- 费用卡片 -->
-      <a-col :span="8">
-        <a-card title="费用统计" :loading="loading">
-          <a-statistic
-            title="累计消费"
-            :value="summaryStats.totalCost || 0"
-            prefix="¥"
-            :precision="2"
-            :value-style="{ color: '#faad14' }"
-          />
-          <a-divider />
-          <a-statistic
-            title="今日消费"
-            :value="summaryStats.todayCost || 0"
-            prefix="¥"
-            :precision="2"
-          />
-        </a-card>
+      <a-col :xs="24" :md="12">
+        <div class="stat-card">
+          <div class="card-header">
+            <h3>Token 消耗</h3>
+            <div class="header-icon stats-icon">❍</div>
+          </div>
+          <a-spin :spinning="loading">
+            <div class="stat-content">
+              <a-statistic
+                title="累计消耗"
+                :value="summaryStats.totalTokens || 0"
+                suffix="Tokens"
+                class="morandi-stat accent"
+              />
+              <div class="mini-stats">
+                <div class="mini-item">
+                  <div class="mini-label">总请求数</div>
+                  <div class="mini-value">{{ summaryStats.totalRequests || 0 }}</div>
+                </div>
+                <div class="mini-item success">
+                  <div class="mini-label">成功请求数</div>
+                  <div class="mini-value">{{ summaryStats.successRequests || 0 }}</div>
+                </div>
+              </div>
+            </div>
+          </a-spin>
+        </div>
       </a-col>
     </a-row>
 
     <!-- 每日消耗趋势图 -->
-    <a-card title="每日消耗趋势（最近7天）" style="margin-top: 16px" :loading="chartLoading">
-      <div ref="chartRef" style="width: 100%; height: 400px"></div>
-    </a-card>
-
-    <!-- 充值记录和消费账单 -->
-    <a-row :gutter="16" style="margin-top: 16px">
-      <!-- 充值记录 -->
-      <a-col :span="12">
-        <a-card title="充值记录" :loading="rechargeLoading">
-          <a-table
-            :columns="rechargeColumns"
-            :data-source="rechargeRecords"
-            :pagination="rechargePagination"
-            @change="handleRechargeTableChange"
-            size="small"
-          >
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.dataIndex === 'amount'">
-                <span style="color: #52c41a; font-weight: bold">
-                  ¥{{ record.amount?.toFixed(4) }}
-                </span>
-              </template>
-              <template v-else-if="column.dataIndex === 'status'">
-                <a-tag v-if="record.status === 'success'" color="green">成功</a-tag>
-                <a-tag v-else-if="record.status === 'pending'" color="orange">处理中</a-tag>
-                <a-tag v-else-if="record.status === 'failed'" color="red">失败</a-tag>
-                <a-tag v-else color="gray">{{ record.status }}</a-tag>
-              </template>
-              <template v-else-if="column.dataIndex === 'paymentMethod'">
-                <a-tag v-if="record.paymentMethod === 'stripe'" color="blue">Stripe</a-tag>
-                <a-tag v-else-if="record.paymentMethod === 'alipay'" color="cyan">支付宝</a-tag>
-                <a-tag v-else>{{ record.paymentMethod }}</a-tag>
-              </template>
-            </template>
-          </a-table>
-        </a-card>
-      </a-col>
-
-      <!-- 消费账单 -->
-      <a-col :span="12">
-        <a-card title="消费账单" :loading="billingLoading">
-          <a-table
-            :columns="billingColumns"
-            :data-source="billingRecords"
-            :pagination="billingPagination"
-            @change="handleBillingTableChange"
-            size="small"
-          >
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.dataIndex === 'amount'">
-                <!-- 充值显示正数（绿色），消费显示负数（红色） -->
-                <span
-                  v-if="record.billingType === 'recharge'"
-                  style="color: #52c41a; font-weight: bold"
-                >
-                  +¥{{ record.amount?.toFixed(4) }}
-                </span>
-                <span
-                  v-else
-                  style="color: #cf1322; font-weight: bold"
-                >
-                  -¥{{ record.amount?.toFixed(4) }}
-                </span>
-              </template>
-              <template v-else-if="column.dataIndex === 'billingType'">
-                <a-tag v-if="record.billingType === 'api_call'" color="orange">
-                  API调用
-                </a-tag>
-                <a-tag v-else-if="record.billingType === 'recharge'" color="green">
-                  充值
-                </a-tag>
-                <a-tag v-else>{{ record.billingType }}</a-tag>
-              </template>
-            </template>
-          </a-table>
-        </a-card>
-      </a-col>
-    </a-row>
-
-    <!-- 充值弹窗 -->
-    <a-modal
-      v-model:open="rechargeModalVisible"
-      title="账户充值"
-      :footer="null"
-      width="500px"
-    >
-      <a-form :model="rechargeForm" layout="vertical" @finish="handleRecharge">
-        <a-form-item label="充值金额（元）" name="amount" :rules="[{ required: true, message: '请输入充值金额' }]">
-          <a-input-number
-            v-model:value="rechargeForm.amount"
-            :min="1"
-            :max="10000"
-            :step="10"
-            :precision="2"
-            style="width: 100%"
-            placeholder="输入充值金额（1-10000元）"
-          >
-            <template #addonBefore>¥</template>
-          </a-input-number>
-        </a-form-item>
-
-        <a-form-item label="快捷金额">
-          <a-space>
-            <a-button @click="rechargeForm.amount = 10">10元</a-button>
-            <a-button @click="rechargeForm.amount = 50">50元</a-button>
-            <a-button @click="rechargeForm.amount = 100">100元</a-button>
-            <a-button @click="rechargeForm.amount = 500">500元</a-button>
-          </a-space>
-        </a-form-item>
-
-        <a-form-item label="支付方式">
-          <a-radio-group v-model:value="rechargeForm.paymentMethod">
-            <a-radio value="stripe">
-              <span style="font-weight: bold">Stripe</span>
-              <span style="color: #999; margin-left: 8px">（支持国际信用卡）</span>
-            </a-radio>
-          </a-radio-group>
-        </a-form-item>
-
-        <a-alert
-          message="测试环境提示"
-          description="当前为 Stripe 沙箱环境，请使用测试卡号：4242 4242 4242 4242"
-          type="info"
-          show-icon
-          style="margin-bottom: 16px"
-        />
-
-        <a-form-item>
-          <a-space>
-            <a-button type="primary" html-type="submit" :loading="recharging">
-              立即支付
-            </a-button>
-            <a-button @click="rechargeModalVisible = false">取消</a-button>
-          </a-space>
-        </a-form-item>
-      </a-form>
-    </a-modal>
+    <div class="chart-card">
+      <div class="card-header">
+        <h3>近 7 日消耗趋势</h3>
+        <span class="subtitle">Token 与请求次数</span>
+      </div>
+      <a-spin :spinning="chartLoading">
+        <div ref="chartRef" class="chart-container"></div>
+      </a-spin>
+    </div>
   </div>
 </template>
 
 <script lang="ts" setup>
 import { onMounted, onUnmounted, ref, computed, nextTick } from 'vue'
 import { getMySummaryStats, getMyDailyStats } from '@/api/statsController'
-import { getMyBalance, getMyBillingRecords } from '@/api/balanceController'
-import { createStripeRecharge, getMyRechargeRecords } from '@/api/rechargeController'
 import { message } from 'ant-design-vue'
 import * as echarts from 'echarts'
-import dayjs from 'dayjs'
 
 const loading = ref(false)
 const chartLoading = ref(false)
-const balanceLoading = ref(false)
-const rechargeLoading = ref(false)
-const billingLoading = ref(false)
-const recharging = ref(false)
-
 const quotaInfo = ref<any>({})
 const summaryStats = ref<API.UserSummaryStatsVO>({})
 const dailyStats = ref<any[]>([])
-const balanceInfo = ref<API.BalanceVO>({})
-const rechargeRecords = ref<API.RechargeRecord[]>([])
-const billingRecords = ref<API.BillingRecord[]>([])
 const chartRef = ref()
 let chartInstance: echarts.ECharts | null = null
 
-// 充值弹窗
-const rechargeModalVisible = ref(false)
-const rechargeForm = ref({
-  amount: 10,
-  paymentMethod: 'stripe',
-})
-
-// 分页配置
-const rechargePagination = ref({
-  current: 1,
-  pageSize: 5,
-  total: 0,
-  showSizeChanger: false,
-})
-
-const billingPagination = ref({
-  current: 1,
-  pageSize: 5,
-  total: 0,
-  showSizeChanger: false,
-})
-
-// 计算配额使用百分比
 const usagePercent = computed(() => {
-  if (
-    !quotaInfo.value.tokenQuota ||
-    quotaInfo.value.tokenQuota === -1 ||
-    !quotaInfo.value.usedTokens
-  ) {
+  if (!quotaInfo.value.tokenQuota || quotaInfo.value.tokenQuota === -1 || !quotaInfo.value.usedTokens) {
     return 0
   }
   return Math.round((quotaInfo.value.usedTokens / quotaInfo.value.tokenQuota) * 100)
 })
 
-// 充值记录表格列
-const rechargeColumns = [
-  {
-    title: '金额',
-    dataIndex: 'amount',
-    width: 120,
-  },
-  {
-    title: '支付方式',
-    dataIndex: 'paymentMethod',
-    width: 110,
-  },
-  {
-    title: '状态',
-    dataIndex: 'status',
-    width: 90,
-  },
-  {
-    title: '时间',
-    dataIndex: 'createTime',
-    width: 180,
-    customRender: ({ text }: any) => dayjs(text).format('YYYY-MM-DD HH:mm:ss'),
-  },
-]
-
-// 消费账单表格列
-const billingColumns = [
-  {
-    title: '金额',
-    dataIndex: 'amount',
-    width: 130,
-  },
-  {
-    title: '类型',
-    dataIndex: 'billingType',
-    width: 100,
-  },
-  {
-    title: '说明',
-    dataIndex: 'description',
-    ellipsis: true,
-  },
-  {
-    title: '时间',
-    dataIndex: 'createTime',
-    width: 180,
-    customRender: ({ text }: any) => dayjs(text).format('YYYY-MM-DD HH:mm:ss'),
-  },
-]
-
-// 加载综合统计数据
 const loadSummaryStats = async () => {
   loading.value = true
   try {
@@ -397,281 +124,243 @@ const loadSummaryStats = async () => {
   }
 }
 
-// 加载每日统计数据
 const loadDailyStats = async () => {
   chartLoading.value = true
   try {
     const endDate = new Date()
     const startDate = new Date()
     startDate.setDate(startDate.getDate() - 6)
-
     const res = await getMyDailyStats({
       startDate: startDate.toISOString().split('T')[0],
       endDate: endDate.toISOString().split('T')[0],
     })
-
     if (res.data.code === 0 && res.data.data) {
       dailyStats.value = res.data.data
-      // 等待 loading 状态更新后再渲染图表
       chartLoading.value = false
       await nextTick()
       renderChart()
     } else {
-      message.error('获取每日统计失败：' + res.data.message)
       chartLoading.value = false
     }
   } catch (error) {
-    message.error('获取每日统计失败')
     chartLoading.value = false
   }
 }
 
-// 渲染图表
+// 极致炫酷的莫兰迪图表配置
 const renderChart = async () => {
-  if (!chartRef.value || dailyStats.value.length === 0) {
-    return
-  }
-
+  if (!chartRef.value || dailyStats.value.length === 0) return
   await nextTick()
-
-  // 如果已存在图表实例，先销毁
-  if (chartInstance) {
-    chartInstance.dispose()
-  }
-
-  // 初始化图表
+  if (chartInstance) chartInstance.dispose()
   chartInstance = echarts.init(chartRef.value)
 
-  // 提取并转换数据为数字类型
   const dates = dailyStats.value.map((item) => item.date)
   const tokens = dailyStats.value.map((item) => Number(item.totalTokens) || 0)
-  const costs = dailyStats.value.map((item) => Number(item.totalCost) || 0)
   const requests = dailyStats.value.map((item) => Number(item.requestCount) || 0)
 
   const option = {
+    color: ['#B8A9B8', '#A9B4C2'], // 雾霾紫、雾蓝
     tooltip: {
       trigger: 'axis',
+      backgroundColor: 'rgba(250, 247, 244, 0.9)',
+      borderColor: '#EBE5DF',
+      textStyle: { color: '#4A4744' },
+      extraCssText: 'backdrop-filter: blur(10px); border-radius: 12px; box-shadow: 0 4px 20px rgba(184, 169, 184, 0.1);',
       axisPointer: {
-        type: 'cross',
-      },
-      formatter: (params: any) => {
-        let result = `${params[0].axisValue}<br/>`
-        params.forEach((param: any) => {
-          const value = param.seriesName === '费用（元）'
-            ? `¥${param.value.toFixed(2)}`
-            : param.value
-          result += `${param.marker}${param.seriesName}: ${value}<br/>`
-        })
-        return result
-      },
+        type: 'line',
+        lineStyle: {
+          color: '#B8A9B8',
+          type: 'dashed'
+        }
+      }
     },
     legend: {
-      data: ['Token消耗', '费用（元）', '请求次数'],
+      data: ['Token消耗', '请求次数'],
+      top: 0,
+      right: 20,
+      icon: 'circle',
+      textStyle: { color: '#868280' }
     },
-    grid: {
-      left: '3%',
-      right: '4%',
-      bottom: '3%',
-      containLabel: true,
-    },
+    grid: { left: '1%', right: '2%', bottom: '3%', top: '15%', containLabel: true },
     xAxis: {
       type: 'category',
       boundaryGap: false,
       data: dates,
+      axisLine: { show: false }, // 去掉轴线
+      axisTick: { show: false }, // 去掉刻度
+      axisLabel: { color: '#868280', margin: 16 }
     },
-    yAxis: [
-      {
-        type: 'value',
-        name: 'Tokens / 请求次数',
-        position: 'left',
+    yAxis: {
+      type: 'value',
+      splitLine: {
+        lineStyle: {
+          type: 'dashed',
+          color: '#EBE5DF' // 极浅的分割线
+        }
       },
-      {
-        type: 'value',
-        name: '费用（元）',
-        position: 'right',
-        axisLabel: {
-          formatter: '¥{value}',
-        },
-      },
-    ],
+      axisLabel: { color: '#868280' }
+    },
     series: [
       {
         name: 'Token消耗',
         type: 'line',
-        data: tokens,
-        smooth: true,
-        itemStyle: {
-          color: '#1890ff',
+        smooth: 0.4, // 平滑曲线
+        symbol: 'circle',
+        symbolSize: 8,
+        showSymbol: false, // 默认不显示点，hover才显示
+        lineStyle: { width: 3 },
+        areaStyle: { // 炫酷的渐变填充
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(184, 169, 184, 0.4)' },
+            { offset: 1, color: 'rgba(184, 169, 184, 0.0)' }
+          ])
         },
-        lineStyle: {
-          color: '#1890ff',
-        },
-      },
-      {
-        name: '费用（元）',
-        type: 'line',
-        yAxisIndex: 1,
-        data: costs,
-        smooth: true,
-        itemStyle: {
-          color: '#faad14',
-        },
-        lineStyle: {
-          color: '#faad14',
-        },
+        data: tokens
       },
       {
         name: '请求次数',
         type: 'line',
-        data: requests,
-        smooth: true,
-        itemStyle: {
-          color: '#52c41a',
-        },
-        lineStyle: {
-          color: '#52c41a',
-        },
-      },
-    ],
+        smooth: 0.4,
+        symbol: 'circle',
+        symbolSize: 8,
+        showSymbol: false,
+        lineStyle: { width: 2, type: 'dashed' }, // 虚线区分
+        data: requests
+      }
+    ]
   }
-
   chartInstance.setOption(option)
 }
 
-// 响应式调整
-const handleResize = () => {
-  if (chartInstance) {
-    chartInstance.resize()
-  }
-}
+const handleResize = () => { if (chartInstance) chartInstance.resize() }
 
-// 加载余额信息
-const loadBalance = async () => {
-  balanceLoading.value = true
-  try {
-    const res = await getMyBalance()
-    if (res.data.code === 0 && res.data.data) {
-      balanceInfo.value = res.data.data
-    } else {
-      message.error('获取余额失败：' + res.data.message)
-    }
-  } catch (error) {
-    message.error('获取余额失败')
-  } finally {
-    balanceLoading.value = false
-  }
-}
-
-// 加载充值记录
-const loadRechargeRecords = async () => {
-  rechargeLoading.value = true
-  try {
-    const res = await getMyRechargeRecords({
-      pageNum: rechargePagination.value.current,
-      pageSize: rechargePagination.value.pageSize,
-    })
-    if (res.data.code === 0 && res.data.data) {
-      rechargeRecords.value = res.data.data.records || []
-      rechargePagination.value.total = Number(res.data.data.totalRow) || 0
-    } else {
-      message.error('获取充值记录失败')
-    }
-  } catch (error) {
-    message.error('获取充值记录失败')
-  } finally {
-    rechargeLoading.value = false
-  }
-}
-
-// 加载消费账单
-const loadBillingRecords = async () => {
-  billingLoading.value = true
-  try {
-    const res = await getMyBillingRecords({
-      pageNum: billingPagination.value.current,
-      pageSize: billingPagination.value.pageSize,
-    })
-    if (res.data.code === 0 && res.data.data) {
-      billingRecords.value = res.data.data.records || []
-      billingPagination.value.total = Number(res.data.data.totalRow) || 0
-    } else {
-      message.error('获取消费账单失败')
-    }
-  } catch (error) {
-    message.error('获取消费账单失败')
-  } finally {
-    billingLoading.value = false
-  }
-}
-
-// 显示充值弹窗
-const showRechargeModal = () => {
-  rechargeModalVisible.value = true
-}
-
-// 处理充值
-const handleRecharge = async () => {
-  if (!rechargeForm.value.amount || rechargeForm.value.amount <= 0) {
-    message.error('请输入有效的充值金额')
-    return
-  }
-
-  recharging.value = true
-  try {
-    const res = await createStripeRecharge({
-      amount: rechargeForm.value.amount,
-    })
-
-    if (res.data.code === 0 && res.data.data?.checkoutUrl) {
-      // 跳转到 Stripe 支付页面
-      message.success('正在跳转到支付页面...')
-      window.location.href = res.data.data.checkoutUrl
-    } else {
-      message.error('创建充值订单失败：' + res.data.message)
-    }
-  } catch (error: any) {
-    message.error('创建充值订单失败：' + (error.message || '未知错误'))
-  } finally {
-    recharging.value = false
-  }
-}
-
-// 充值记录表格分页变化
-const handleRechargeTableChange = (pagination: any) => {
-  rechargePagination.value.current = pagination.current
-  loadRechargeRecords()
-}
-
-// 消费账单表格分页变化
-const handleBillingTableChange = (pagination: any) => {
-  billingPagination.value.current = pagination.current
-  loadBillingRecords()
-}
-
-// 组件挂载时添加监听
 onMounted(() => {
-  loadBalance()
   loadSummaryStats()
   loadDailyStats()
-  loadRechargeRecords()
-  loadBillingRecords()
   window.addEventListener('resize', handleResize)
 })
 
-// 组件卸载时清理
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
-  if (chartInstance) {
-    chartInstance.dispose()
-    chartInstance = null
-  }
+  if (chartInstance) { chartInstance.dispose(); chartInstance = null }
 })
 </script>
 
 <style scoped>
-#profilePage {
+.morandi-dashboard {
   padding: 24px;
-  background: #f0f2f5;
-  min-height: calc(100vh - 64px);
+  background: var(--bg-page);
+  min-height: calc(100vh - 72px);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* 统一卡片外观 */
+.stat-card, .chart-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-soft);
+  height: 100%;
+  transition: transform 0.3s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.card-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-main);
+  letter-spacing: 0.5px;
+}
+
+.subtitle {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.header-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+.quota-icon { background: rgba(184, 169, 184, 0.15); color: var(--color-primary); }
+.stats-icon { background: rgba(169, 180, 194, 0.15); color: var(--color-secondary); }
+
+/* 数字样式覆盖 */
+:deep(.morandi-stat .ant-statistic-title) {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+:deep(.morandi-stat .ant-statistic-content) {
+  font-family: 'DIN Alternate', 'Helvetica Neue', sans-serif; /* 如果有数字字体更好看 */
+}
+:deep(.morandi-stat.primary .ant-statistic-content) {
+  color: var(--color-primary);
+}
+:deep(.morandi-stat.accent .ant-statistic-content) {
+  color: var(--color-secondary);
+}
+
+.morandi-progress {
+  margin: 20px 0;
+}
+
+.quota-details {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 20px;
+  border-top: 1px dashed var(--border-color);
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.detail-item .label { font-size: 12px; color: var(--text-secondary); }
+.detail-item .value { font-size: 16px; font-weight: 600; color: var(--text-main); }
+
+/* 迷你统计框 */
+.mini-stats {
+  display: flex;
+  gap: 16px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px dashed var(--border-color);
+}
+
+.mini-item {
+  flex: 1;
+  background: rgba(245, 242, 239, 0.5);
+  padding: 16px;
+  border-radius: 12px;
+}
+.mini-item.success { background: rgba(168, 191, 168, 0.1); }
+.mini-label { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+.mini-value { font-size: 20px; font-weight: 600; color: var(--text-main); }
+.mini-item.success .mini-value { color: #6C9A7C; }
+
+/* 图表容器 */
+.chart-container {
+  width: 100%;
+  height: 380px;
 }
 </style>

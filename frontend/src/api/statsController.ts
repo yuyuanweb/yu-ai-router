@@ -47,13 +47,6 @@ export async function pageHistory(
   })
 }
 
-/** 获取我的费用统计 GET /stats/my/cost */
-export async function getMyCostStats(options?: { [key: string]: any }) {
-  return request<API.BaseResponseCostStatsVO>('/stats/my/cost', {
-    method: 'GET',
-    ...(options || {}),
-  })
-}
 
 /** 获取我的每日统计数据 GET /stats/my/daily */
 export async function getMyDailyStats(

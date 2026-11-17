@@ -1,184 +1,46 @@
 <template>
-  <a-layout-header class="header">
-    <a-row :wrap="false">
-      <!-- 左侧：Logo和标题 -->
-      <a-col flex="200px">
-        <RouterLink to="/">
-          <div class="header-left">
-            <img class="logo" src="@/assets/logo.png" alt="Logo" />
-            <h1 class="site-title">鱼 AI 网关</h1>
+  <a-layout-header class="morandi-header">
+    <div class="header-right">
+      <div v-if="loginUserStore.loginUser.id" class="user-profile">
+        <a-dropdown placement="bottomRight">
+          <div class="user-trigger">
+            <a-avatar :src="loginUserStore.loginUser.userAvatar" class="user-avatar" />
+            <span class="user-name">{{ loginUserStore.loginUser.userName ?? '无名' }}</span>
           </div>
-        </RouterLink>
-      </a-col>
-      <!-- 中间：导航菜单 -->
-      <a-col flex="auto">
-        <a-menu
-          v-model:selectedKeys="selectedKeys"
-          mode="horizontal"
-          :items="menuItems"
-          @click="handleMenuClick"
-        />
-      </a-col>
-      <!-- 右侧：用户操作区域 -->
-      <a-col>
-        <div class="user-login-status">
-          <div v-if="loginUserStore.loginUser.id">
-            <a-dropdown>
-              <a-space>
-                <a-avatar :src="loginUserStore.loginUser.userAvatar" />
-                {{ loginUserStore.loginUser.userName ?? '无名' }}
-              </a-space>
-              <template #overlay>
-                <a-menu>
-                  <a-menu-item @click="doLogout">
-                    <LogoutOutlined />
-                    退出登录
-                  </a-menu-item>
-                </a-menu>
-              </template>
-            </a-dropdown>
-          </div>
-          <div v-else>
-            <a-button type="primary" href="/user/login">登录</a-button>
-          </div>
-        </div>
-      </a-col>
-    </a-row>
+          <template #overlay>
+            <a-menu class="morandi-dropdown">
+              <a-menu-item key="profile" @click="router.push('/user/profile')">
+                <UserOutlined /> 个人中心
+              </a-menu-item>
+              <a-menu-divider />
+              <a-menu-item key="logout" @click="doLogout">
+                <LogoutOutlined /> 退出登录
+              </a-menu-item>
+            </a-menu>
+          </template>
+        </a-dropdown>
+      </div>
+      <div v-else>
+        <a-button type="primary" shape="round" href="/user/login">登录 / 注册</a-button>
+      </div>
+    </div>
   </a-layout-header>
 </template>
 
 <script setup lang="ts">
-import { computed, h, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { type MenuProps, message } from 'ant-design-vue'
+import { message } from 'ant-design-vue'
 import { useLoginUserStore } from '@/stores/loginUser.ts'
 import { userLogout } from '@/api/userController.ts'
-import {
-  LogoutOutlined,
-  HomeOutlined,
-  CommentOutlined,
-  KeyOutlined,
-  AppstoreOutlined,
-  CloudServerOutlined,
-  StopOutlined,
-  HistoryOutlined,
-  PictureOutlined,
-  ApiOutlined,
-  SafetyOutlined,
-} from '@ant-design/icons-vue'
+import { LogoutOutlined, UserOutlined } from '@ant-design/icons-vue'
 
 const loginUserStore = useLoginUserStore()
 const router = useRouter()
-// 当前选中菜单
-const selectedKeys = ref<string[]>(['/'])
-// 监听路由变化，更新当前选中菜单
-router.afterEach((to) => {
-  selectedKeys.value = [to.path]
-})
 
-// 菜单配置项
-const originItems = [
-  {
-    key: '/',
-    icon: () => h(HomeOutlined),
-    label: '主页',
-    title: '主页',
-  },
-  {
-    key: '/chat',
-    icon: () => h(CommentOutlined),
-    label: 'AI 对话',
-    title: 'AI 对话',
-  },
-  {
-    key: '/image',
-    icon: () => h(PictureOutlined),
-    label: 'AI 绘图',
-    title: 'AI 绘图',
-  },
-  {
-    key: '/user/apikey',
-    icon: () => h(KeyOutlined),
-    label: 'API Key',
-    title: 'API Key 管理',
-  },
-  {
-    key: '/user/history',
-    icon: () => h(HistoryOutlined),
-    label: '调用历史',
-    title: '调用历史',
-  },
-  {
-    key: '/user/mykeys',
-    icon: () => h(SafetyOutlined),
-    label: '我的密钥',
-    title: '我的密钥（BYOK）',
-  },
-  {
-    key: '/admin/userManage',
-    label: '用户管理',
-    title: '用户管理',
-  },
-  {
-    key: '/admin/modelManage',
-    icon: () => h(AppstoreOutlined),
-    label: '模型管理',
-    title: '模型管理',
-  },
-  {
-    key: '/admin/providerManage',
-    icon: () => h(CloudServerOutlined),
-    label: '提供者管理',
-    title: '提供者管理',
-  },
-  {
-    key: '/admin/blacklistManage',
-    icon: () => h(StopOutlined),
-    label: '黑名单管理',
-    title: '黑名单管理',
-  },
-  {
-    key: '/admin/pluginManage',
-    icon: () => h(ApiOutlined),
-    label: '插件管理',
-    title: '插件管理',
-  },
-]
-
-// 过滤菜单项
-const filterMenus = (menus = [] as MenuProps['items']) => {
-  return menus?.filter((menu) => {
-    const menuKey = menu?.key as string
-    if (menuKey?.startsWith('/admin')) {
-      const loginUser = loginUserStore.loginUser
-      if (!loginUser || loginUser.userRole !== 'admin') {
-        return false
-      }
-    }
-    return true
-  })
-}
-
-// 展示在菜单的路由数组
-const menuItems = computed<MenuProps['items']>(() => filterMenus(originItems))
-
-// 处理菜单点击
-const handleMenuClick: MenuProps['onClick'] = (e) => {
-  const key = e.key as string
-  selectedKeys.value = [key]
-  // 跳转到对应页面
-  if (key.startsWith('/')) {
-    router.push(key)
-  }
-}
-
-// 退出登录
 const doLogout = async () => {
   const res = await userLogout()
   if (res.data.code === 0) {
-    loginUserStore.setLoginUser({
-      userName: '未登录',
-    })
+    loginUserStore.setLoginUser({ userName: '未登录' })
     message.success('退出登录成功')
     await router.push('/user/login')
   } else {
@@ -188,29 +50,55 @@ const doLogout = async () => {
 </script>
 
 <style scoped>
-.header {
-  background: #fff;
-  padding: 0 24px;
-}
-
-.header-left {
+.morandi-header {
+  background: var(--bg-page) !important; /* 与背景融为一体 */
+  height: 72px;
+  padding: 0 32px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: flex-end;
+  border-bottom: 1px solid transparent;
 }
 
-.logo {
-  height: 48px;
-  width: 48px;
+.user-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 30px;
+  transition: all 0.3s ease;
 }
 
-.site-title {
-  margin: 0;
-  font-size: 18px;
-  color: #1890ff;
+.user-trigger:hover {
+  background: rgba(255, 255, 255, 0.5);
 }
 
-.ant-menu-horizontal {
-  border-bottom: none !important;
+.user-avatar {
+  border: 2px solid #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.user-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-main);
+}
+
+.morandi-dropdown {
+  background: var(--bg-card);
+  border-radius: 12px;
+  box-shadow: var(--shadow-soft);
+  border: 1px solid var(--border-color);
+  padding: 8px;
+}
+
+:deep(.ant-dropdown-menu-item) {
+  border-radius: 8px;
+  transition: all 0.3s;
+}
+:deep(.ant-dropdown-menu-item:hover) {
+  background-color: rgba(184, 169, 184, 0.1) !important;
+  color: var(--color-primary) !important;
 }
 </style>

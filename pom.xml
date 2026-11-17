@@ -9,7 +9,7 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>com.yupi</groupId>
-    <artifactId>yu-ai-router</artifactId>
+    <artifactId>ai-gateway</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>yu-ai-router</name>
     <description>yu-ai-router</description>
@@ -99,12 +99,7 @@
             <artifactId>hutool-all</artifactId>
             <version>5.8.43</version>
         </dependency>
-        <!-- Stripe Java SDK -->
-        <dependency>
-            <groupId>com.stripe</groupId>
-            <artifactId>stripe-java</artifactId>
-            <version>31.2.0</version>
-        </dependency>
+
         <!-- Resilience4j 熔断器 -->
         <dependency>
             <groupId>io.github.resilience4j</groupId>

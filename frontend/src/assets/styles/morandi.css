@@ -1,0 +1,65 @@
+/* src/assets/styles/morandi.css */
+:root {
+  /* 页面背景色 (燕麦奶白/浅奶灰) */
+  --bg-page: #F5F2EF;
+  /* 卡片背景色 */
+  --bg-card: #FAF7F4;
+
+  /* 莫兰迪色系主色 */
+  --color-primary: #B8A9B8; /* 雾霾紫 */
+  --color-secondary: #A9B4C2; /* 雾蓝 */
+  --color-accent: #C9B0B0; /* 豆沙 */
+
+  /* 文字颜色 */
+  --text-main: #4A4744; /* 深炭灰，替代纯黑 */
+  --text-secondary: #868280; /* 浅灰 */
+  --text-placeholder: #B0ABA8;
+
+  /* 边框与阴影 (极淡) */
+  --border-color: #EBE5DF;
+  --shadow-soft: 0 4px 20px rgba(184, 169, 184, 0.08);
+
+  /* 大圆角 */
+  --radius-lg: 16px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
+}
+
+/* 全局基础样式重置 */
+body {
+  background-color: var(--bg-page) !important;
+  color: var(--text-main) !important;
+}
+
+/* 设置滚动条柔和化 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: #D5CDC5;
+  border-radius: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+a, button, .ant-btn, .ant-card, .ant-input, .ant-menu-item, .message {
+  transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+}
+
+/* 弹窗和下拉动画稍微放慢 */
+.ant-modal-content, .ant-dropdown-menu {
+  animation: morandiFadeIn 0.4s ease-out;
+}
+
+@keyframes morandiFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}

@@ -195,7 +195,7 @@ const handleGenerate = async () => {
     if (res.data && res.data.data) {
       generatedImages.value = res.data.data
       message.success('图片生成成功！')
-      
+
       // 刷新历史记录
       loadHistory()
     } else {
@@ -248,8 +248,21 @@ onMounted(() => {
 
 <style scoped>
 #imageGenerationPage {
-  padding: 24px;
-  background: #f0f2f5;
+  padding: 32px;
+  background: var(--bg-page); /* 燕麦奶白 */
   min-height: calc(100vh - 64px);
+}
+
+/* 卡片去掉默认的深阴影，改为弥散阴影 */
+:deep(.ant-card) {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-soft) !important;
+}
+
+:deep(.ant-card-head) {
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-main);
 }
 </style>

@@ -9,6 +9,8 @@ import 'ant-design-vue/dist/reset.css'
 
 import '@/access'
 
+import '@/assets/styles/morandi.css'
+
 const app = createApp(App)
 
 app.use(createPinia())

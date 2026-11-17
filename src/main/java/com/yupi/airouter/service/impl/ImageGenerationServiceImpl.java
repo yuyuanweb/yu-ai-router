@@ -21,8 +21,6 @@ import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -46,12 +44,6 @@ public class ImageGenerationServiceImpl extends ServiceImpl<ImageGenerationRecor
 
     @Resource
     private QuotaService quotaService;
-
-    @Resource
-    private BalanceService balanceService;
-
-    @Resource
-    private BillingService billingService;
 
     @Resource
     private UserService userService;
@@ -100,28 +92,14 @@ public class ImageGenerationServiceImpl extends ServiceImpl<ImageGenerationRecor
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "模型提供者不存在");
         }
 
-        // 预估费用（绘图模型按张计费）
-        BigDecimal estimatedCost = model.getInputPrice() != null
-                ? model.getInputPrice().multiply(new BigDecimal(n))
-                : BigDecimal.ZERO;
-
-        // 检查余额
-        if (userId != null && !balanceService.checkBalance(userId, estimatedCost)) {
-            throw new BusinessException(ErrorCode.OPERATION_ERROR,
-                    "账户余额不足，生成" + n + "张图片预计需要¥" + estimatedCost + "，请先充值");
-        }
-
         try {
             // 调用模型生成图片
             ImageGenerationResponse response = callImageGenerationModel(model, provider, request, size, n);
 
             long duration = System.currentTimeMillis() - startTime;
 
-            // 计算实际费用（按实际生成的图片数量）
+            // 获取实际生成的图片数量
             int actualImageCount = response.getData() != null ? response.getData().size() : n;
-            BigDecimal actualCost = model.getInputPrice() != null
-                    ? model.getInputPrice().multiply(new BigDecimal(actualImageCount))
-                    : BigDecimal.ZERO;
 
             // 记录生成成功
             for (ImageGenerationResponse.ImageData imageData : response.getData()) {
@@ -137,7 +115,6 @@ public class ImageGenerationServiceImpl extends ServiceImpl<ImageGenerationRecor
                         .size(size)
                         .quality(request.getQuality())
                         .status("success")
-                        .cost(model.getInputPrice() != null ? model.getInputPrice() : BigDecimal.ZERO)
                         .duration((int) duration)
                         .clientIp(clientIp)
                         .createTime(LocalDateTime.now())
@@ -151,14 +128,6 @@ public class ImageGenerationServiceImpl extends ServiceImpl<ImageGenerationRecor
                 int tokensPerImage = 1000;
                 int totalTokens = actualImageCount * tokensPerImage;
                 quotaService.deductTokens(userId, totalTokens);
-
-                // 扣减余额
-                if (actualCost.compareTo(BigDecimal.ZERO) > 0) {
-                    String description = apiKeyId != null
-                            ? "API图片生成 - " + modelKey + " x" + actualImageCount
-                            : "网页图片生成 - " + modelKey + " x" + actualImageCount;
-                    balanceService.deductBalance(userId, actualCost, null, description);
-                }
             }
 
             log.info("图片生成成功：用户 {}, 模型 {}, 数量 {}, 耗时 {}ms", userId, modelKey, actualImageCount, duration);
@@ -177,7 +146,6 @@ public class ImageGenerationServiceImpl extends ServiceImpl<ImageGenerationRecor
                     .size(size)
                     .quality(request.getQuality())
                     .status("failed")
-                    .cost(BigDecimal.ZERO)
                     .duration((int) duration)
                     .errorMessage(e.getMessage())
                     .clientIp(clientIp)

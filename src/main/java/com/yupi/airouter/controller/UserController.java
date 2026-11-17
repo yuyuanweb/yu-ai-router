@@ -14,7 +14,6 @@ import com.yupi.airouter.model.dto.user.*;
 import com.yupi.airouter.model.entity.User;
 import com.yupi.airouter.model.vo.LoginUserVO;
 import com.yupi.airouter.model.vo.UserVO;
-import com.yupi.airouter.service.BillingService;
 import com.yupi.airouter.service.QuotaService;
 import com.yupi.airouter.service.RequestLogService;
 import com.yupi.airouter.service.UserService;
@@ -23,7 +22,6 @@ import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.*;
 
-import java.math.BigDecimal;
 
 import java.util.List;
 
@@ -45,8 +43,6 @@ public class UserController {
     @Resource
     private RequestLogService requestLogService;
 
-    @Resource
-    private BillingService billingService;
 
     /**
      * 用户注册
@@ -313,10 +309,6 @@ public class UserController {
         analysisVO.setSuccessRequests(requestLogService.countUserSuccessRequests(userId));
         analysisVO.setTotalTokens(requestLogService.countUserTokens(userId));
         
-        // 费用统计
-        analysisVO.setTotalCost(billingService.getUserTotalCost(userId));
-        analysisVO.setTodayCost(billingService.getUserTodayCost(userId));
-        
         return ResultUtils.success(analysisVO);
     }
 
@@ -338,8 +330,6 @@ public class UserController {
         private Long totalRequests;
         private Long successRequests;
         private Long totalTokens;
-        private BigDecimal totalCost;
-        private BigDecimal todayCost;
     }
 
     /**

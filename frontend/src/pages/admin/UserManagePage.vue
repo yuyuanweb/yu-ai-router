@@ -403,7 +403,10 @@ onMounted(() => {
 <style scoped>
 #userManagePage {
   padding: 24px;
-  background: white;
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
   margin-top: 16px;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-soft);
 }
 </style>

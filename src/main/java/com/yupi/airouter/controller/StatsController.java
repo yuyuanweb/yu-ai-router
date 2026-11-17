@@ -10,7 +10,6 @@ import com.yupi.airouter.exception.ThrowUtils;
 import com.yupi.airouter.model.dto.log.RequestLogQueryRequest;
 import com.yupi.airouter.model.entity.RequestLog;
 import com.yupi.airouter.model.entity.User;
-import com.yupi.airouter.service.BillingService;
 import com.yupi.airouter.service.RequestLogService;
 import com.yupi.airouter.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -22,7 +21,6 @@ import lombok.NoArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.Serializable;
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -41,9 +39,6 @@ public class StatsController {
 
     @Resource
     private UserService userService;
-
-    @Resource
-    private BillingService billingService;
 
     @Resource
     private com.yupi.airouter.service.QuotaService quotaService;
@@ -78,23 +73,6 @@ public class StatsController {
         return ResultUtils.success(logs);
     }
 
-    /**
-     * 获取我的费用统计
-     */
-    @GetMapping("/my/cost")
-    @AuthCheck(mustRole = UserConstant.DEFAULT_ROLE)
-    @Operation(summary = "获取我的费用统计")
-    public BaseResponse<CostStatsVO> getMyCostStats(HttpServletRequest request) {
-        User loginUser = userService.getLoginUser(request);
-        BigDecimal totalCost = billingService.getUserTotalCost(loginUser.getId());
-        BigDecimal todayCost = billingService.getUserTodayCost(loginUser.getId());
-
-        CostStatsVO vo = new CostStatsVO();
-        vo.setTotalCost(totalCost);
-        vo.setTodayCost(todayCost);
-
-        return ResultUtils.success(vo);
-    }
 
     /**
      * 获取我的综合统计数据（个人中心使用）
@@ -115,10 +93,6 @@ public class StatsController {
         vo.setTokenQuota(loginUser.getTokenQuota());
         vo.setUsedTokens(loginUser.getUsedTokens() != null ? loginUser.getUsedTokens() : 0L);
         vo.setRemainingQuota(quotaService.getRemainingQuota(userId));
-        
-        // 费用统计
-        vo.setTotalCost(billingService.getUserTotalCost(userId));
-        vo.setTodayCost(billingService.getUserTodayCost(userId));
         
         // 请求统计
         vo.setTotalRequests(requestLogService.countUserRequests(userId));
@@ -219,23 +193,7 @@ public class StatsController {
         private Long totalTokens;
     }
 
-    /**
-     * 费用统计视图对象
-     */
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class CostStatsVO implements Serializable {
-        /**
-         * 总消费金额（元）
-         */
-        private BigDecimal totalCost;
 
-        /**
-         * 今日消费金额（元）
-         */
-        private BigDecimal todayCost;
-    }
 
     /**
      * 用户综合统计视图对象
@@ -262,16 +220,6 @@ public class StatsController {
          * 剩余配额（-1表示无限制）
          */
         private Long remainingQuota;
-        
-        /**
-         * 总消费金额（元）
-         */
-        private BigDecimal totalCost;
-        
-        /**
-         * 今日消费金额（元）
-         */
-        private BigDecimal todayCost;
         
         /**
          * 总请求数
